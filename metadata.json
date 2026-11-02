@@ -1,0 +1,6 @@
+{
+  "name": "Matik - Location de Matériel",
+  "description": "Plateforme universelle de location d'objets et matériel pour particuliers et professionnels avec contrat instantané et caution Stripe sécurisée.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
