@@ -16,6 +16,7 @@ export interface Equipment {
   tags?: string[];
   inStock: boolean;
   isActive?: boolean;
+  is_published?: boolean;
   ownerType?: 'pro' | 'particulier';
   ownerId?: string;
   ownerName?: string;

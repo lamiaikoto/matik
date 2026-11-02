@@ -26,6 +26,15 @@ import { Footer } from './components/Footer';
 import { EQUIPMENT_LIST } from './data/equipment';
 import { supabase, mapSupabaseUserToMatikProfile } from './lib/supabase';
 import {
+  fetchEquipmentsFromSupabase,
+  fetchUserEquipmentsFromSupabase,
+  saveEquipmentToSupabase,
+  updateEquipmentStatusInSupabase,
+  deleteEquipmentFromSupabase,
+  subscribeToEquipments,
+  generateUUID,
+} from './lib/equipmentService';
+import {
   Equipment,
   BookingPayload,
   PageType,
@@ -40,78 +49,6 @@ import {
 const INITIAL_BOOKINGS: BookingRecord[] = [];
 
 export default function App() {
-  // Charge les données sauvegardées ou réinitialise les données de test préchargées
-  useEffect(() => {
-    try {
-      // Effacement des anciennes données de test préchargées pour démarrage production 100% vierge
-      const hasResetDemo = localStorage.getItem('matik_clean_virgin_state_prod_v1');
-      if (!hasResetDemo) {
-        localStorage.removeItem('matik_equipment_list');
-        localStorage.removeItem('matik_bookings');
-        localStorage.setItem('matik_clean_virgin_state_prod_v1', 'true');
-      }
-
-      // Chargement de la session utilisateur durable (clé matik_user_session)
-      const savedUserStr = localStorage.getItem('matik_user_session') || localStorage.getItem('matik_user');
-      if (savedUserStr) {
-        const parsed = JSON.parse(savedUserStr);
-        if (parsed && typeof parsed === 'object') {
-          setCurrentUser(parsed);
-          localStorage.setItem('matik_user_session', JSON.stringify(parsed));
-        }
-      }
-
-      // Synchronisation de la session active Supabase
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session?.user) {
-          const profile = mapSupabaseUserToMatikProfile(session.user);
-          setCurrentUser(profile);
-          try {
-            localStorage.setItem('matik_user_session', JSON.stringify(profile));
-            localStorage.setItem('matik_user', JSON.stringify(profile));
-          } catch {}
-        }
-      });
-
-      // Écoute en temps réel des changements d'état d'authentification Supabase (Login, Logout, OAuth redirect)
-      const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-        console.info('[Supabase Auth Event]', event);
-        if (session?.user) {
-          const profile = mapSupabaseUserToMatikProfile(session.user);
-          setCurrentUser(profile);
-          try {
-            localStorage.setItem('matik_user_session', JSON.stringify(profile));
-            localStorage.setItem('matik_user', JSON.stringify(profile));
-          } catch {}
-        } else if (event === 'SIGNED_OUT') {
-          setCurrentUser(null);
-          try {
-            localStorage.removeItem('matik_user_session');
-            localStorage.removeItem('matik_user');
-          } catch {}
-        }
-      });
-      const savedEqStr = localStorage.getItem('matik_equipment_list');
-      if (savedEqStr) {
-        const parsedEq = JSON.parse(savedEqStr);
-        if (Array.isArray(parsedEq) && parsedEq.length > 0) {
-          setEquipmentList(parsedEq);
-        }
-      }
-      const savedBookingsStr = localStorage.getItem('matik_bookings');
-      if (savedBookingsStr) {
-        const parsedBookings = JSON.parse(savedBookingsStr);
-        if (Array.isArray(parsedBookings) && parsedBookings.length > 0) {
-          setBookingList(parsedBookings);
-        }
-      }
-
-      return () => {
-        authListener.subscription.unsubscribe();
-      };
-    } catch {}
-  }, []);
-
   const [currentPage, setCurrentPage] = useState<PageType>('accueil');
   const [currentUser, setCurrentUser] = useState<CurrentUser>(null);
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
@@ -129,6 +66,129 @@ export default function App() {
   const [passportModalEquipment, setPassportModalEquipment] = useState<Equipment | null>(null);
   const [detailsEquipment, setDetailsEquipment] = useState<Equipment | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+
+  // Fonction centrale pour charger les équipements depuis Supabase (table equipments)
+  const loadEquipmentsData = async (user?: CurrentUser) => {
+    try {
+      // 1. Récupération des annonces publiques (is_published = true) depuis la table Supabase
+      const publicEqs = await fetchEquipmentsFromSupabase();
+
+      // 2. Si l'utilisateur est connecté, récupérer également ses annonces spécifiques (brouillons ou inactives)
+      let combined = [...publicEqs];
+      if (user?.id) {
+        const userEqs = await fetchUserEquipmentsFromSupabase(user.id);
+        userEqs.forEach((uEq) => {
+          const index = combined.findIndex((e) => e.id === uEq.id);
+          if (index >= 0) {
+            combined[index] = uEq;
+          } else {
+            combined.unshift(uEq);
+          }
+        });
+      }
+
+      // 3. Mise à jour de l'état
+      if (combined.length > 0) {
+        setEquipmentList(combined);
+        setSelectedEquipment((prev) => (prev ? (combined.find((c) => c.id === prev.id) || combined[0]) : combined[0]));
+        try {
+          localStorage.setItem('matik_equipment_list', JSON.stringify(combined));
+        } catch {}
+      } else {
+        // Repli local si la base de données distante est vide
+        const savedEqStr = localStorage.getItem('matik_equipment_list');
+        if (savedEqStr) {
+          const parsedEq = JSON.parse(savedEqStr);
+          if (Array.isArray(parsedEq) && parsedEq.length > 0) {
+            setEquipmentList(parsedEq);
+            setSelectedEquipment((prev) => prev || parsedEq[0]);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[App loadEquipmentsData Warning]', err);
+    }
+  };
+
+  // Charge les données sauvegardées ou réinitialise les données de test préchargées
+  useEffect(() => {
+    try {
+      // Effacement des anciennes données de test préchargées pour démarrage production 100% vierge
+      const hasResetDemo = localStorage.getItem('matik_clean_virgin_state_prod_v1');
+      if (!hasResetDemo) {
+        localStorage.removeItem('matik_equipment_list');
+        localStorage.removeItem('matik_bookings');
+        localStorage.setItem('matik_clean_virgin_state_prod_v1', 'true');
+      }
+
+      // Chargement de la session utilisateur durable (clé matik_user_session)
+      let initialUser: CurrentUser = null;
+      const savedUserStr = localStorage.getItem('matik_user_session') || localStorage.getItem('matik_user');
+      if (savedUserStr) {
+        const parsed = JSON.parse(savedUserStr);
+        if (parsed && typeof parsed === 'object') {
+          initialUser = parsed;
+          setCurrentUser(parsed);
+          localStorage.setItem('matik_user_session', JSON.stringify(parsed));
+        }
+      }
+
+      // Chargement initial des annonces depuis Supabase
+      loadEquipmentsData(initialUser);
+
+      // Synchronisation de la session active Supabase
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          const profile = mapSupabaseUserToMatikProfile(session.user);
+          setCurrentUser(profile);
+          loadEquipmentsData(profile);
+          try {
+            localStorage.setItem('matik_user_session', JSON.stringify(profile));
+            localStorage.setItem('matik_user', JSON.stringify(profile));
+          } catch {}
+        }
+      });
+
+      // Écoute en temps réel des changements d'état d'authentification Supabase (Login, Logout, OAuth redirect)
+      const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+        console.info('[Supabase Auth Event]', event);
+        if (session?.user) {
+          const profile = mapSupabaseUserToMatikProfile(session.user);
+          setCurrentUser(profile);
+          loadEquipmentsData(profile);
+          try {
+            localStorage.setItem('matik_user_session', JSON.stringify(profile));
+            localStorage.setItem('matik_user', JSON.stringify(profile));
+          } catch {}
+        } else if (event === 'SIGNED_OUT') {
+          setCurrentUser(null);
+          loadEquipmentsData(null);
+          try {
+            localStorage.removeItem('matik_user_session');
+            localStorage.removeItem('matik_user');
+          } catch {}
+        }
+      });
+
+      // Écoute temps réel des changements sur la table equipments de Supabase
+      const unsubscribeRealtime = subscribeToEquipments(() => {
+        loadEquipmentsData(currentUser);
+      });
+
+      const savedBookingsStr = localStorage.getItem('matik_bookings');
+      if (savedBookingsStr) {
+        const parsedBookings = JSON.parse(savedBookingsStr);
+        if (Array.isArray(parsedBookings) && parsedBookings.length > 0) {
+          setBookingList(parsedBookings);
+        }
+      }
+
+      return () => {
+        authListener.subscription.unsubscribe();
+        unsubscribeRealtime();
+      };
+    } catch {}
+  }, []);
   const [inspectionModalData, setInspectionModalData] = useState<{
     isOpen: boolean;
     equipment: Equipment | null;
@@ -160,6 +220,10 @@ export default function App() {
 
   // Loueur Equipment Management
   const handleAddNewEquipment = () => {
+    if (!currentUser) {
+      setIsAuthModalOpen(true);
+      return;
+    }
     setEquipmentToEdit(null);
     setIsEditorModalOpen(true);
   };
@@ -169,32 +233,68 @@ export default function App() {
     setIsEditorModalOpen(true);
   };
 
-  const handleSaveEquipment = (saved: Equipment) => {
+  const handleSaveEquipment = async (saved: Equipment) => {
+    // Statut de publication : TOUJOURS true par défaut pour visibilité dans le catalogue public
+    const equipmentToSave: Equipment = {
+      ...saved,
+      isActive: saved.isActive !== false,
+      is_published: true,
+      ownerId: saved.ownerId || currentUser?.id,
+    };
+
+    // 1. Mise à jour immédiate optimiste locale
     setEquipmentList((prev) => {
-      const exists = prev.some((item) => item.id === saved.id);
-      const updated = exists ? prev.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...prev];
+      const exists = prev.some((item) => item.id === equipmentToSave.id);
+      const updated = exists
+        ? prev.map((item) => (item.id === equipmentToSave.id ? equipmentToSave : item))
+        : [equipmentToSave, ...prev];
       try {
         localStorage.setItem('matik_equipment_list', JSON.stringify(updated));
       } catch {}
       return updated;
     });
 
-    if (!selectedEquipment || selectedEquipment.id === saved.id) {
-      setSelectedEquipment(saved);
+    if (!selectedEquipment || selectedEquipment.id === equipmentToSave.id) {
+      setSelectedEquipment(equipmentToSave);
+    }
+
+    // 2. Persistance dans la table 'equipments' de Supabase
+    const res = await saveEquipmentToSupabase(equipmentToSave, currentUser?.id);
+    if (res.success && res.data) {
+      const savedFromServer = res.data;
+      setEquipmentList((prev) => {
+        const updated = prev.map((item) => (item.id === equipmentToSave.id ? savedFromServer : item));
+        try {
+          localStorage.setItem('matik_equipment_list', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+      if (selectedEquipment?.id === equipmentToSave.id) {
+        setSelectedEquipment(savedFromServer);
+      }
+    } else if (res.error) {
+      console.warn('[handleSaveEquipment] Notice Supabase save:', res.error);
     }
   };
 
-  const handleToggleActive = (id: string) => {
+  const handleToggleActive = async (id: string) => {
+    const item = equipmentList.find((e) => e.id === id);
+    const newStatus = item ? item.isActive === false : true;
+
     setEquipmentList((prev) => {
-      const updated = prev.map((item) => (item.id === id ? { ...item, isActive: item.isActive === false } : item));
+      const updated = prev.map((e) =>
+        e.id === id ? { ...e, isActive: newStatus, is_published: newStatus } : e
+      );
       try {
         localStorage.setItem('matik_equipment_list', JSON.stringify(updated));
       } catch {}
       return updated;
     });
+
+    await updateEquipmentStatusInSupabase(id, newStatus);
   };
 
-  const handleDeleteEquipment = (id: string) => {
+  const handleDeleteEquipment = async (id: string) => {
     setEquipmentList((prev) => {
       const updated = prev.filter((item) => item.id !== id);
       try {
@@ -205,6 +305,8 @@ export default function App() {
       }
       return updated;
     });
+
+    await deleteEquipmentFromSupabase(id);
   };
 
   // Profit Simulator action
@@ -213,8 +315,12 @@ export default function App() {
     suggestedName?: string,
     suggestedPrice?: number
   ) => {
+    if (!currentUser) {
+      setIsAuthModalOpen(true);
+      return;
+    }
     const draft: Equipment = {
-      id: `equip-${Date.now()}`,
+      id: generateUUID(),
       name: suggestedName || '',
       category: suggestedCategory || 'High-Tech & Audiovisuel',
       dailyRate: suggestedPrice || 25,
@@ -232,7 +338,9 @@ export default function App() {
           : currentUser?.name || '',
       inStock: true,
       isActive: true,
+      is_published: true,
       ownerType: currentUser?.role === 'loueur_pro' ? 'pro' : 'particulier',
+      ownerId: currentUser?.id,
     };
     setEquipmentToEdit(draft);
     setIsEditorModalOpen(true);

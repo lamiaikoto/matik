@@ -38,9 +38,16 @@ export const Catalog: React.FC<CatalogProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('Tous');
 
+  // Le catalogue public ne présente que les annonces actives et publiées (is_published = true)
+  const activeEquipments = useMemo(() => {
+    return equipmentList.filter(
+      (item) => item.isActive !== false && item.is_published !== false
+    );
+  }, [equipmentList]);
+
   // Catégories dynamiques et universelles : prédéfinies + toutes les catégories sur-mesure créées
   const categories = useMemo(() => {
-    const listCats = Array.from(new Set(equipmentList.map((e) => e.category).filter(Boolean)));
+    const listCats = Array.from(new Set(activeEquipments.map((e) => e.category).filter(Boolean)));
     const merged = ['Tous', ...EQUIPMENT_CATEGORIES.filter((c) => c !== 'Tous')];
     listCats.forEach((cat) => {
       if (!merged.includes(cat)) {
@@ -48,12 +55,14 @@ export const Catalog: React.FC<CatalogProps> = ({
       }
     });
     return merged;
-  }, [equipmentList]);
+  }, [activeEquipments]);
 
-  const filteredEquipment =
-    selectedCategory === 'Tous'
-      ? equipmentList
-      : equipmentList.filter((item) => item.category === selectedCategory);
+  const filteredEquipment = useMemo(() => {
+    if (selectedCategory === 'Tous') {
+      return activeEquipments;
+    }
+    return activeEquipments.filter((item) => item.category === selectedCategory);
+  }, [activeEquipments, selectedCategory]);
 
   return (
     <section id="catalogue" className="py-16 lg:py-24 border-b border-slate-200/80 bg-[#F8FAFC]">

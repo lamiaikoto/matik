@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Equipment, CurrentUser } from '../types';
 import { EQUIPMENT_CATEGORIES } from '../data/equipment';
+import { generateUUID, isValidUUID } from '../lib/equipmentService';
 import {
   X,
   Plus,
@@ -374,8 +375,16 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
       ? customCategoryName.trim()
       : category;
 
+    const finalId = equipmentToEdit?.id && isValidUUID(equipmentToEdit.id)
+      ? equipmentToEdit.id
+      : generateUUID();
+
+    const isPublishedByDefault = equipmentToEdit
+      ? (equipmentToEdit.is_published !== false && equipmentToEdit.isActive !== false)
+      : true;
+
     const savedEquipment: Equipment = {
-      id: equipmentToEdit ? equipmentToEdit.id : `mat-${Date.now()}`,
+      id: finalId,
       name: name.trim(),
       category: finalCategory,
       city: city.trim() || 'France',
@@ -400,7 +409,8 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
           value: s.value.trim() || 'Inclus',
         })),
       inStock: true,
-      isActive: equipmentToEdit ? equipmentToEdit.isActive : true,
+      isActive: isPublishedByDefault,
+      is_published: isPublishedByDefault,
       createdAt: equipmentToEdit?.createdAt || new Date().toISOString(),
     };
 

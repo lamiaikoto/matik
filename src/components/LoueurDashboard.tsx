@@ -421,7 +421,13 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
   const isParticulier = currentUser?.role === 'loueur_particulier';
   const isPro = currentUser?.role === 'loueur_pro';
 
-  const filtered = equipmentList.filter((item) => {
+  // Dans l'espace gestion loueur, afficher les équipements appartenant à ce compte
+  const myEquipments = useMemo(() => {
+    if (!currentUser?.id) return equipmentList;
+    return equipmentList.filter((item) => !item.ownerId || item.ownerId === currentUser.id);
+  }, [equipmentList, currentUser]);
+
+  const filtered = myEquipments.filter((item) => {
     const matchesSearch =
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.category.toLowerCase().includes(searchQuery.toLowerCase());
