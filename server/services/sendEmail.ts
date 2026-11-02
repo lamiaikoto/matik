@@ -118,6 +118,70 @@ function buildEmailHTML(data: EmailData, role: 'client' | 'loueur'): string {
 </html>`;
 }
 
+async function sendSingleEmail(
+  resend: Resend,
+  options: {
+    to: string;
+    subject: string;
+    html: string;
+    attachment: { filename: string; content: Buffer };
+    recipientType: 'client' | 'loueur';
+    primarySender: string;
+    fallbackSender: string;
+  }
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const { to, subject, html, attachment, recipientType, primarySender, fallbackSender } = options;
+
+  console.log(`\n📨 [Resend] Préparation envoi email ${recipientType.toUpperCase()} vers "${to}"`);
+  console.log(`   - Expéditeur initial : "${primarySender}"`);
+
+  const attempt = async (sender: string) => {
+    return await resend.emails.send({
+      from: sender,
+      to: [to],
+      subject,
+      html,
+      attachments: [
+        {
+          filename: attachment.filename,
+          content: attachment.content,
+        },
+      ],
+    });
+  };
+
+  try {
+    let res = await attempt(primarySender);
+    console.log(`   📡 Réponse Resend brute pour "${primarySender}" :`, JSON.stringify(res));
+
+    if (res.error) {
+      console.warn(`   ⚠️ [Resend] Erreur avec "${primarySender}" : [${res.error.name}] ${res.error.message}`);
+      if (primarySender !== fallbackSender) {
+        console.log(`   🔄 [Resend] Repli sur "${fallbackSender}"...`);
+        res = await attempt(fallbackSender);
+        console.log(`   📡 Réponse Resend brute pour "${fallbackSender}" :`, JSON.stringify(res));
+      }
+    }
+
+    if (res.error) {
+      const errorDetail = `Resend Error [${res.error.name}]: ${res.error.message}`;
+      console.error(`   ❌ [Resend] Échec d'envoi à "${to}" :`, errorDetail);
+      return { success: false, error: errorDetail };
+    }
+
+    if (res.data?.id) {
+      console.log(`   ✅ [Resend] Email ${recipientType} délivré à "${to}" (ID: ${res.data.id})`);
+      return { success: true, messageId: res.data.id };
+    }
+
+    return { success: false, error: 'Réponse Resend inattendue.' };
+  } catch (err: any) {
+    const msg = `Exception réseau/SDK Resend : ${err?.message || err}`;
+    console.error(`   💥 [Resend]`, msg);
+    return { success: false, error: msg };
+  }
+}
+
 /**
  * Envoie l'e-mail de confirmation de réservation au client ET au loueur
  * avec le contrat PDF en pièce jointe.
@@ -128,89 +192,59 @@ export async function sendBookingEmails(
 ): Promise<{ clientSent: boolean; loueurSent: boolean; errors: string[] }> {
   const resend = getResendClient();
   if (!resend) {
-    console.warn('⚠️ [Email] RESEND_API_KEY non configurée — envoi ignoré.');
-    return { clientSent: false, loueurSent: false, errors: ['RESEND_API_KEY non configurée dans .env'] };
+    const warn = 'RESEND_API_KEY non configurée — envoi ignoré.';
+    console.warn('⚠️ [Resend]', warn);
+    return { clientSent: false, loueurSent: false, errors: [warn] };
   }
 
-  const primarySender = process.env.EMAIL_FROM || 'onboarding@resend.dev';
-  const fallbackSender = 'onboarding@resend.dev';
+  const rawSender = (process.env.EMAIL_FROM || '').trim();
+  const primarySender = rawSender
+    ? (rawSender.includes('<') ? rawSender : `Matik <${rawSender}>`)
+    : 'Matik <onboarding@resend.dev>';
+  const fallbackSender = 'Matik <onboarding@resend.dev>';
+
   const errors: string[] = [];
   let clientSent = false;
   let loueurSent = false;
 
   const attachment = {
     filename: `contrat-location-${data.bookingId}.pdf`,
-    content: contractPdfBuffer.toString('base64'),
+    content: contractPdfBuffer,
   };
 
   // ─── E-mail au Client ─────────────────────────────────
-  try {
-    let from = primarySender;
-    try {
-      await resend.emails.send({
-        from,
-        to: [data.clientEmail],
-        subject: `[Matik] Votre contrat de location #${data.bookingId} — ${data.equipmentName}`,
-        html: buildEmailHTML(data, 'client'),
-        attachments: [attachment],
-      });
-      clientSent = true;
-      console.log(`✅ [Email] Confirmation envoyée au client : ${data.clientEmail}`);
-    } catch (err: any) {
-      if (from !== fallbackSender && err?.message?.toLowerCase().includes('not verified')) {
-        console.warn(`⚠️ [Email] Domaine ${from} non vérifié, nouvel essai avec ${fallbackSender}...`);
-        await resend.emails.send({
-          from: fallbackSender,
-          to: [data.clientEmail],
-          subject: `[Matik] Votre contrat de location #${data.bookingId} — ${data.equipmentName}`,
-          html: buildEmailHTML(data, 'client'),
-          attachments: [attachment],
-        });
-        clientSent = true;
-        console.log(`✅ [Email] Confirmation envoyée au client via ${fallbackSender}`);
-      } else {
-        throw err;
-      }
+  const clientEmail = (data.clientEmail || '').trim();
+  if (clientEmail) {
+    const clientRes = await sendSingleEmail(resend, {
+      to: clientEmail,
+      subject: `[Matik] Votre contrat de location #${data.bookingId} — ${data.equipmentName}`,
+      html: buildEmailHTML(data, 'client'),
+      attachment,
+      recipientType: 'client',
+      primarySender,
+      fallbackSender,
+    });
+    clientSent = clientRes.success;
+    if (clientRes.error) {
+      errors.push(`Client (${clientEmail}): ${clientRes.error}`);
     }
-  } catch (err: any) {
-    const msg = `Erreur envoi e-mail client (${data.clientEmail}): ${err?.message || err}`;
-    console.error(`❌ [Email]`, msg);
-    errors.push(msg);
   }
 
   // ─── E-mail au Loueur ─────────────────────────────────
-  if (data.loueurEmail && data.loueurEmail.trim() !== '') {
-    try {
-      let from = primarySender;
-      try {
-        await resend.emails.send({
-          from,
-          to: [data.loueurEmail],
-          subject: `[Matik] Nouvelle réservation #${data.bookingId} — ${data.equipmentName}`,
-          html: buildEmailHTML(data, 'loueur'),
-          attachments: [attachment],
-        });
-        loueurSent = true;
-        console.log(`✅ [Email] Notification envoyée au loueur : ${data.loueurEmail}`);
-      } catch (err: any) {
-        if (from !== fallbackSender && err?.message?.toLowerCase().includes('not verified')) {
-          await resend.emails.send({
-            from: fallbackSender,
-            to: [data.loueurEmail],
-            subject: `[Matik] Nouvelle réservation #${data.bookingId} — ${data.equipmentName}`,
-            html: buildEmailHTML(data, 'loueur'),
-            attachments: [attachment],
-          });
-          loueurSent = true;
-          console.log(`✅ [Email] Notification envoyée au loueur via ${fallbackSender}`);
-        } else {
-          throw err;
-        }
-      }
-    } catch (err: any) {
-      const msg = `Erreur envoi e-mail loueur (${data.loueurEmail}): ${err?.message || err}`;
-      console.error(`❌ [Email]`, msg);
-      errors.push(msg);
+  const loueurEmail = (data.loueurEmail || '').trim();
+  if (loueurEmail && loueurEmail !== clientEmail) {
+    const loueurRes = await sendSingleEmail(resend, {
+      to: loueurEmail,
+      subject: `[Matik] Nouvelle réservation #${data.bookingId} — ${data.equipmentName}`,
+      html: buildEmailHTML(data, 'loueur'),
+      attachment,
+      recipientType: 'loueur',
+      primarySender,
+      fallbackSender,
+    });
+    loueurSent = loueurRes.success;
+    if (loueurRes.error) {
+      errors.push(`Loueur (${loueurEmail}): ${loueurRes.error}`);
     }
   }
 

@@ -67,6 +67,7 @@ export interface StripeHoldResult {
 async function generateContractPDF(data: ContractData): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
+      console.log(`📑 [PDFKit] Début de génération du contrat PDF pour la réservation ${data.bookingId}...`);
       const doc = new PDFDocument({
         size: 'A4',
         margins: { top: 50, bottom: 50, left: 50, right: 50 },
@@ -79,8 +80,15 @@ async function generateContractPDF(data: ContractData): Promise<Buffer> {
 
       const chunks: Uint8Array[] = [];
       doc.on('data', (chunk: Uint8Array) => chunks.push(chunk));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', reject);
+      doc.on('end', () => {
+        const buffer = Buffer.concat(chunks);
+        console.log(`✅ [PDFKit] Contrat généré avec succès (${buffer.length} octets).`);
+        resolve(buffer);
+      });
+      doc.on('error', (err) => {
+        console.error('❌ [PDFKit] Erreur du stream PDF :', err);
+        reject(err);
+      });
 
       const pageWidth = doc.page.width - 100;
 
@@ -202,6 +210,7 @@ async function generateContractPDF(data: ContractData): Promise<Buffer> {
 
       doc.end();
     } catch (error) {
+      console.error('❌ [PDFKit] Exception lors du dessin du PDF :', error);
       reject(error);
     }
   });
@@ -277,101 +286,167 @@ function buildEmailHTML(data: EmailData, role: 'client' | 'loueur'): string {
 </html>`;
 }
 
+/**
+ * Envoie un e-mail unique via l'API Resend avec gestion explicite des erreurs et fallback
+ */
+async function sendSingleEmail(
+  resend: Resend,
+  options: {
+    to: string;
+    subject: string;
+    html: string;
+    attachment: { filename: string; content: Buffer };
+    recipientType: 'client' | 'loueur';
+    primarySender: string;
+    fallbackSender: string;
+  }
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const { to, subject, html, attachment, recipientType, primarySender, fallbackSender } = options;
+
+  console.log(`\n📨 [Resend] Préparation envoi email ${recipientType.toUpperCase()} vers "${to}"`);
+  console.log(`   - Objet : "${subject}"`);
+  console.log(`   - Expéditeur initial : "${primarySender}"`);
+  console.log(`   - Pièce jointe : "${attachment.filename}" (${attachment.content.length} octets)`);
+
+  const attempt = async (sender: string) => {
+    console.log(`   🚀 Appel Resend API avec from: "${sender}"...`);
+    const payload = {
+      from: sender,
+      to: [to],
+      subject,
+      html,
+      attachments: [
+        {
+          filename: attachment.filename,
+          content: attachment.content,
+        },
+      ],
+    };
+    return await resend.emails.send(payload);
+  };
+
+  try {
+    // 1ère tentative : expéditeur principal
+    let res = await attempt(primarySender);
+
+    console.log(`   📡 Réponse Resend brute pour "${primarySender}" :`, JSON.stringify(res));
+
+    // Si Resend retourne une erreur (par exemple domaine non vérifié)
+    if (res.error) {
+      console.warn(`   ⚠️ [Resend] Erreur avec l'expéditeur "${primarySender}" : [${res.error.name}] ${res.error.message}`);
+
+      // Si l'expéditeur principal est différent du fallback, on réessaie automatiquement avec le fallback
+      if (primarySender !== fallbackSender) {
+        console.log(`   🔄 [Resend] Tentative de repli (fallback) automatique sur "${fallbackSender}"...`);
+        res = await attempt(fallbackSender);
+        console.log(`   📡 Réponse Resend brute pour le repli "${fallbackSender}" :`, JSON.stringify(res));
+      }
+    }
+
+    // Vérification finale du résultat
+    if (res.error) {
+      const errorDetail = `Resend Error [${res.error.name}]: ${res.error.message}`;
+      console.error(`   ❌ [Resend] Échec définitif de l'envoi à "${to}" :`, errorDetail);
+      return { success: false, error: errorDetail };
+    }
+
+    if (res.data?.id) {
+      console.log(`   ✅ [Resend] Succès ! E-mail ${recipientType} délivré à "${to}" (Message ID: ${res.data.id})`);
+      return { success: true, messageId: res.data.id };
+    }
+
+    const unkErr = 'Réponse inattendue de Resend (ni data.id ni error)';
+    console.error(`   ❌ [Resend] ${unkErr}`);
+    return { success: false, error: unkErr };
+  } catch (exception: any) {
+    const excMsg = `Exception inattendue réseau/SDK Resend : ${exception?.message || exception}`;
+    console.error(`   💥 [Resend]`, excMsg);
+    return { success: false, error: excMsg };
+  }
+}
+
 async function sendBookingEmails(
   data: EmailData,
   contractPdfBuffer: Buffer
-): Promise<{ clientSent: boolean; loueurSent: boolean; errors: string[] }> {
+): Promise<{ clientSent: boolean; loueurSent: boolean; clientMessageId?: string; loueurMessageId?: string; errors: string[] }> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey || !apiKey.trim()) {
-    console.warn('⚠️ [Resend] RESEND_API_KEY non configurée — envoi ignoré.');
-    return { clientSent: false, loueurSent: false, errors: ['RESEND_API_KEY absente'] };
+    const warn = 'RESEND_API_KEY non configurée dans l\'environnement Vercel.';
+    console.warn('⚠️ [Resend]', warn);
+    return { clientSent: false, loueurSent: false, errors: [warn] };
   }
 
-  const resend = new Resend(apiKey.trim());
-  const primarySender = process.env.EMAIL_FROM || 'onboarding@resend.dev';
-  const fallbackSender = 'onboarding@resend.dev';
+  const trimmedKey = apiKey.trim();
+  console.log(`🔑 [Resend] Clé API détectée (longueur: ${trimmedKey.length}, commence par "${trimmedKey.substring(0, 3)}...")`);
+
+  const resend = new Resend(trimmedKey);
+
+  // Normalisation des expéditeurs
+  // Format recommandé pour Resend : "Nom <email@domaine>"
+  const rawSender = (process.env.EMAIL_FROM || '').trim();
+  const primarySender = rawSender
+    ? (rawSender.includes('<') ? rawSender : `Matik <${rawSender}>`)
+    : 'Matik <onboarding@resend.dev>';
+  const fallbackSender = 'Matik <onboarding@resend.dev>';
+
+  console.log(`📧 [Resend] Configuration expéditeur principal : "${primarySender}" | fallback : "${fallbackSender}"`);
+
   const errors: string[] = [];
   let clientSent = false;
   let loueurSent = false;
+  let clientMessageId: string | undefined;
+  let loueurMessageId: string | undefined;
 
   const attachment = {
     filename: `contrat-location-${data.bookingId}.pdf`,
-    content: contractPdfBuffer.toString('base64'),
+    content: contractPdfBuffer,
   };
 
-  // Envoi client
-  try {
-    let from = primarySender;
-    try {
-      await resend.emails.send({
-        from,
-        to: [data.clientEmail],
-        subject: `[Matik] Votre contrat de location #${data.bookingId} — ${data.equipmentName}`,
-        html: buildEmailHTML(data, 'client'),
-        attachments: [attachment],
-      });
-      clientSent = true;
-      console.log(`✅ [Resend] Email client envoyé à ${data.clientEmail} via ${from}`);
-    } catch (err: any) {
-      // Si le domaine personnalisé n'est pas vérifié sur Resend, retry avec onboarding@resend.dev
-      if (from !== fallbackSender && err?.message?.toLowerCase().includes('not verified')) {
-        console.warn(`⚠️ [Resend] Domaine ${from} non vérifié, nouvel essai avec ${fallbackSender}...`);
-        await resend.emails.send({
-          from: fallbackSender,
-          to: [data.clientEmail],
-          subject: `[Matik] Votre contrat de location #${data.bookingId} — ${data.equipmentName}`,
-          html: buildEmailHTML(data, 'client'),
-          attachments: [attachment],
-        });
-        clientSent = true;
-        console.log(`✅ [Resend] Email client envoyé via ${fallbackSender}`);
-      } else {
-        throw err;
-      }
+  // 1. Envoi au client
+  const clientEmail = (data.clientEmail || '').trim();
+  if (clientEmail) {
+    const clientRes = await sendSingleEmail(resend, {
+      to: clientEmail,
+      subject: `[Matik] Votre contrat de location #${data.bookingId} — ${data.equipmentName}`,
+      html: buildEmailHTML(data, 'client'),
+      attachment,
+      recipientType: 'client',
+      primarySender,
+      fallbackSender,
+    });
+
+    clientSent = clientRes.success;
+    clientMessageId = clientRes.messageId;
+    if (clientRes.error) {
+      errors.push(`Client (${clientEmail}): ${clientRes.error}`);
     }
-  } catch (err: any) {
-    const msg = `Erreur email client (${data.clientEmail}): ${err?.message || err}`;
-    console.error('❌ [Resend]', msg);
-    errors.push(msg);
+  } else {
+    errors.push('Adresse e-mail client vide ou manquante.');
   }
 
-  // Envoi loueur
-  if (data.loueurEmail && data.loueurEmail.trim() !== '') {
-    try {
-      let from = primarySender;
-      try {
-        await resend.emails.send({
-          from,
-          to: [data.loueurEmail],
-          subject: `[Matik] Nouvelle réservation #${data.bookingId} — ${data.equipmentName}`,
-          html: buildEmailHTML(data, 'loueur'),
-          attachments: [attachment],
-        });
-        loueurSent = true;
-        console.log(`✅ [Resend] Email loueur envoyé à ${data.loueurEmail}`);
-      } catch (err: any) {
-        if (from !== fallbackSender && err?.message?.toLowerCase().includes('not verified')) {
-          await resend.emails.send({
-            from: fallbackSender,
-            to: [data.loueurEmail],
-            subject: `[Matik] Nouvelle réservation #${data.bookingId} — ${data.equipmentName}`,
-            html: buildEmailHTML(data, 'loueur'),
-            attachments: [attachment],
-          });
-          loueurSent = true;
-          console.log(`✅ [Resend] Email loueur envoyé via ${fallbackSender}`);
-        } else {
-          throw err;
-        }
-      }
-    } catch (err: any) {
-      const msg = `Erreur email loueur (${data.loueurEmail}): ${err?.message || err}`;
-      console.error('❌ [Resend]', msg);
-      errors.push(msg);
+  // 2. Envoi au loueur (si renseigné)
+  const loueurEmail = (data.loueurEmail || '').trim();
+  if (loueurEmail && loueurEmail !== clientEmail) {
+    const loueurRes = await sendSingleEmail(resend, {
+      to: loueurEmail,
+      subject: `[Matik] Nouvelle réservation #${data.bookingId} — ${data.equipmentName}`,
+      html: buildEmailHTML(data, 'loueur'),
+      attachment,
+      recipientType: 'loueur',
+      primarySender,
+      fallbackSender,
+    });
+
+    loueurSent = loueurRes.success;
+    loueurMessageId = loueurRes.messageId;
+    if (loueurRes.error) {
+      errors.push(`Loueur (${loueurEmail}): ${loueurRes.error}`);
     }
+  } else if (!loueurEmail) {
+    console.log('ℹ️ [Resend] Aucun e-mail loueur renseigné, envoi loueur ignoré.');
   }
 
-  return { clientSent, loueurSent, errors };
+  return { clientSent, loueurSent, clientMessageId, loueurMessageId, errors };
 }
 
 // ─── 3. GESTION STRIPE (CAUTION SANS DÉBIT) ───────────────────
@@ -452,16 +527,19 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  // Healthcheck
+  // Healthcheck & Configuration Diagnostic
   if (req.method === 'GET') {
+    const resendKey = process.env.RESEND_API_KEY;
+    const stripeKey = process.env.STRIPE_SECRET_KEY;
     return res.status(200).json({
       status: 'ok',
       service: 'Matik Booking Serverless API (Vercel Native)',
       timestamp: new Date().toISOString(),
       config: {
-        stripe: !!process.env.STRIPE_SECRET_KEY,
-        resend: !!process.env.RESEND_API_KEY,
-        emailFrom: process.env.EMAIL_FROM || 'onboarding@resend.dev',
+        resendConfigured: !!(resendKey && resendKey.trim()),
+        resendKeyPrefix: resendKey ? `${resendKey.trim().substring(0, 5)}...` : null,
+        stripeConfigured: !!(stripeKey && stripeKey.trim()),
+        emailFrom: process.env.EMAIL_FROM || 'Matik <onboarding@resend.dev>',
       },
     });
   }
@@ -470,8 +548,18 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Méthode non autorisée. Utilisez POST.' });
   }
 
+  const startTime = Date.now();
+  console.log(`\n================================================================`);
+  console.log(`🚀 [Vercel API Booking] Requête POST reçue à ${new Date().toISOString()}`);
+
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+
+    console.log('📦 Corps reçu (clés) :', Object.keys(body).join(', '));
+    console.log(`👤 Client : "${body.clientPrenom} ${body.clientNom}" <${body.clientEmail}>`);
+    console.log(`🏢 Loueur : "${body.loueurNom || body.artisanNom}" <${body.loueurEmail}>`);
+    console.log(`🛠️ Équipement : "${body.equipmentName || body.nomMatiere}" (${body.equipmentCategory || body.categorie})`);
+    console.log(`💰 Montants : Total=${body.totalLocation} €, Caution=${body.montantCaution} €`);
 
     // Validation des champs requis
     const required = [
@@ -484,8 +572,9 @@ export default async function handler(req: any, res: any) {
       'totalLocation',
       'montantCaution',
     ];
-    const missing = required.filter((f) => !body[f] && body[f] !== 0);
+    const missing = required.filter((f) => body[f] === undefined || body[f] === null || body[f] === '');
     if (missing.length > 0) {
+      console.warn('⚠️ [Vercel API] Champs obligatoires manquants :', missing);
       return res.status(400).json({
         success: false,
         error: `Champs obligatoires manquants : ${missing.join(', ')}`,
@@ -493,26 +582,23 @@ export default async function handler(req: any, res: any) {
     }
 
     const bookingId = `MAT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-
-    console.log(`\n🔔 [Vercel API] Nouvelle réservation : ${bookingId}`);
-    console.log(`👤 Client : ${body.clientPrenom} ${body.clientNom} (${body.clientEmail})`);
-    console.log(`🛠️ Matériel : ${body.equipmentName || body.nomMatiere || 'Équipement'}`);
+    console.log(`🏷️ Référence générée : ${bookingId}`);
 
     // 1. Génération du contrat PDF
     const contractData: ContractData = {
       bookingId,
-      clientPrenom: body.clientPrenom,
-      clientNom: body.clientNom,
-      clientEmail: body.clientEmail,
-      clientTelephone: body.clientTelephone || '',
-      loueurNom: body.loueurNom || body.artisanNom || '',
-      loueurEmail: body.loueurEmail || '',
-      loueurTelephone: body.loueurTelephone || '',
-      equipmentName: body.equipmentName || body.nomMatiere || '',
-      equipmentCategory: body.equipmentCategory || body.categorie || '',
-      equipmentId: body.equipmentId || '',
-      startDate: body.startDate,
-      endDate: body.endDate,
+      clientPrenom: String(body.clientPrenom).trim(),
+      clientNom: String(body.clientNom).trim(),
+      clientEmail: String(body.clientEmail).trim(),
+      clientTelephone: String(body.clientTelephone || '').trim(),
+      loueurNom: String(body.loueurNom || body.artisanNom || '').trim(),
+      loueurEmail: String(body.loueurEmail || '').trim(),
+      loueurTelephone: String(body.loueurTelephone || '').trim(),
+      equipmentName: String(body.equipmentName || body.nomMatiere || '').trim(),
+      equipmentCategory: String(body.equipmentCategory || body.categorie || '').trim(),
+      equipmentId: String(body.equipmentId || '').trim(),
+      startDate: String(body.startDate),
+      endDate: String(body.endDate),
       dureeJours: Number(body.dureeJours),
       prixJournalier: Number(body.prixJournalier) || 0,
       sousTotal: Number(body.sousTotal) || 0,
@@ -524,9 +610,8 @@ export default async function handler(req: any, res: any) {
     let pdfBuffer: Buffer;
     try {
       pdfBuffer = await generateContractPDF(contractData);
-      console.log(`✅ [PDF] Contrat généré : ${pdfBuffer.length} octets`);
     } catch (pdfErr: any) {
-      console.error('❌ [PDF] Erreur génération contrat :', pdfErr);
+      console.error('❌ [Vercel API] Erreur critique génération PDF :', pdfErr);
       return res.status(500).json({
         success: false,
         error: `Erreur génération PDF : ${pdfErr?.message || pdfErr}`,
@@ -540,51 +625,64 @@ export default async function handler(req: any, res: any) {
 
     const stripeData: StripeHoldData = {
       bookingId,
-      clientEmail: body.clientEmail,
-      clientNom: `${body.clientPrenom} ${body.clientNom}`.trim(),
-      equipmentName: body.equipmentName || body.nomMatiere || '',
-      equipmentId: body.equipmentId || '',
-      montantCaution: Number(body.montantCaution),
-      totalLocation: Number(body.totalLocation),
+      clientEmail: contractData.clientEmail,
+      clientNom: `${contractData.clientPrenom} ${contractData.clientNom}`.trim(),
+      equipmentName: contractData.equipmentName,
+      equipmentId: contractData.equipmentId,
+      montantCaution: contractData.montantCaution,
+      totalLocation: contractData.totalLocation,
       appUrl,
     };
 
+    console.log('💳 [Stripe] Initialisation session caution Stripe...');
     const stripeResult = await createStripeCheckoutSession(stripeData);
 
     // 3. Envoi des e-mails avec le contrat en pièce jointe
     const emailData: EmailData = {
       bookingId,
-      clientPrenom: body.clientPrenom,
-      clientNom: body.clientNom,
-      clientEmail: body.clientEmail,
-      loueurNom: body.loueurNom || body.artisanNom || '',
-      loueurEmail: body.loueurEmail || '',
-      equipmentName: body.equipmentName || body.nomMatiere || '',
-      equipmentCategory: body.equipmentCategory || body.categorie || '',
-      startDate: body.startDate,
-      endDate: body.endDate,
-      dureeJours: Number(body.dureeJours),
-      sousTotal: Number(body.sousTotal) || 0,
-      fraisService: Number(body.fraisService) || 0,
-      totalLocation: Number(body.totalLocation),
-      montantCaution: Number(body.montantCaution),
+      clientPrenom: contractData.clientPrenom,
+      clientNom: contractData.clientNom,
+      clientEmail: contractData.clientEmail,
+      loueurNom: contractData.loueurNom,
+      loueurEmail: contractData.loueurEmail,
+      equipmentName: contractData.equipmentName,
+      equipmentCategory: contractData.equipmentCategory,
+      startDate: contractData.startDate,
+      endDate: contractData.endDate,
+      dureeJours: contractData.dureeJours,
+      sousTotal: contractData.sousTotal,
+      fraisService: contractData.fraisService,
+      totalLocation: contractData.totalLocation,
+      montantCaution: contractData.montantCaution,
       stripeCheckoutUrl: stripeResult.checkoutUrl,
     };
 
+    console.log('📬 [Resend] Début de la procédure d\'envoi d\'e-mails...');
     const emailResult = await sendBookingEmails(emailData, pdfBuffer);
+
+    const totalDuration = Date.now() - startTime;
+    console.log(`🏁 [Vercel API] Traitement terminé en ${totalDuration}ms`);
+    console.log(`   - Email Client : ${emailResult.clientSent ? '✅ Envoyé' : '❌ Échec'}`);
+    console.log(`   - Email Loueur : ${emailResult.loueurSent ? '✅ Envoyé' : 'ℹ️ Non envoyé ou ignoré'}`);
+    if (emailResult.errors.length > 0) {
+      console.warn(`   - Erreurs Email :`, emailResult.errors);
+    }
+    console.log(`================================================================\n`);
 
     // 4. Réponse
     return res.status(200).json({
       success: true,
       bookingId,
-      message: 'Réservation validée, contrat généré et e-mail transmis.',
+      message: 'Réservation validée, contrat PDF généré et service e-mail exécuté.',
       contract: {
         generated: true,
         sizeBytes: pdfBuffer.length,
       },
       email: {
         clientSent: emailResult.clientSent,
+        clientMessageId: emailResult.clientMessageId || null,
         loueurSent: emailResult.loueurSent,
+        loueurMessageId: emailResult.loueurMessageId || null,
         errors: emailResult.errors,
       },
       stripe: {
@@ -594,27 +692,27 @@ export default async function handler(req: any, res: any) {
         error: stripeResult.error || null,
       },
       payload: {
-        client_nom: `${body.clientPrenom} ${body.clientNom}`.trim(),
-        client_email: body.clientEmail,
-        artisan_nom: body.loueurNom || body.artisanNom || '',
-        nom_matiere: body.equipmentName || body.nomMatiere || '',
-        duree_jours: Number(body.dureeJours),
-        sous_total: Number(body.sousTotal) || 0,
-        frais_service: Number(body.fraisService) || 0,
-        total_location: Number(body.totalLocation),
-        montant_caution: Number(body.montantCaution),
-        date_debut: body.startDate,
-        date_fin: body.endDate,
+        client_nom: `${contractData.clientPrenom} ${contractData.clientNom}`.trim(),
+        client_email: contractData.clientEmail,
+        artisan_nom: contractData.loueurNom,
+        nom_matiere: contractData.equipmentName,
+        duree_jours: contractData.dureeJours,
+        sous_total: contractData.sousTotal,
+        frais_service: contractData.fraisService,
+        total_location: contractData.totalLocation,
+        montant_caution: contractData.montantCaution,
+        date_debut: contractData.startDate,
+        date_fin: contractData.endDate,
         timestamp: new Date().toISOString(),
-        loueur_nom: body.loueurNom || body.artisanNom || '',
-        loueur_email: body.loueurEmail || '',
-        loueur_telephone: body.loueurTelephone || '',
-        artisan_email: body.loueurEmail || '',
-        artisan_telephone: body.loueurTelephone || '',
+        loueur_nom: contractData.loueurNom,
+        loueur_email: contractData.loueurEmail,
+        loueur_telephone: contractData.loueurTelephone,
+        artisan_email: contractData.loueurEmail,
+        artisan_telephone: contractData.loueurTelephone,
       },
     });
   } catch (error: any) {
-    console.error('❌ [Vercel API] Erreur critique :', error);
+    console.error('❌ [Vercel API] Erreur critique non gérée :', error);
     return res.status(500).json({
       success: false,
       error: error?.message || 'Erreur interne du serveur',
