@@ -132,7 +132,8 @@ export async function sendBookingEmails(
     return { clientSent: false, loueurSent: false, errors: ['RESEND_API_KEY non configurée dans .env'] };
   }
 
-  const senderAddress = process.env.EMAIL_FROM || 'Matik <noreply@matik.fr>';
+  const primarySender = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+  const fallbackSender = 'onboarding@resend.dev';
   const errors: string[] = [];
   let clientSent = false;
   let loueurSent = false;
@@ -144,15 +145,33 @@ export async function sendBookingEmails(
 
   // ─── E-mail au Client ─────────────────────────────────
   try {
-    await resend.emails.send({
-      from: senderAddress,
-      to: [data.clientEmail],
-      subject: `[Matik] Votre contrat de location #${data.bookingId} — ${data.equipmentName}`,
-      html: buildEmailHTML(data, 'client'),
-      attachments: [attachment],
-    });
-    clientSent = true;
-    console.log(`✅ [Email] Confirmation envoyée au client : ${data.clientEmail}`);
+    let from = primarySender;
+    try {
+      await resend.emails.send({
+        from,
+        to: [data.clientEmail],
+        subject: `[Matik] Votre contrat de location #${data.bookingId} — ${data.equipmentName}`,
+        html: buildEmailHTML(data, 'client'),
+        attachments: [attachment],
+      });
+      clientSent = true;
+      console.log(`✅ [Email] Confirmation envoyée au client : ${data.clientEmail}`);
+    } catch (err: any) {
+      if (from !== fallbackSender && err?.message?.toLowerCase().includes('not verified')) {
+        console.warn(`⚠️ [Email] Domaine ${from} non vérifié, nouvel essai avec ${fallbackSender}...`);
+        await resend.emails.send({
+          from: fallbackSender,
+          to: [data.clientEmail],
+          subject: `[Matik] Votre contrat de location #${data.bookingId} — ${data.equipmentName}`,
+          html: buildEmailHTML(data, 'client'),
+          attachments: [attachment],
+        });
+        clientSent = true;
+        console.log(`✅ [Email] Confirmation envoyée au client via ${fallbackSender}`);
+      } else {
+        throw err;
+      }
+    }
   } catch (err: any) {
     const msg = `Erreur envoi e-mail client (${data.clientEmail}): ${err?.message || err}`;
     console.error(`❌ [Email]`, msg);
@@ -160,17 +179,34 @@ export async function sendBookingEmails(
   }
 
   // ─── E-mail au Loueur ─────────────────────────────────
-  if (data.loueurEmail) {
+  if (data.loueurEmail && data.loueurEmail.trim() !== '') {
     try {
-      await resend.emails.send({
-        from: senderAddress,
-        to: [data.loueurEmail],
-        subject: `[Matik] Nouvelle réservation #${data.bookingId} — ${data.equipmentName}`,
-        html: buildEmailHTML(data, 'loueur'),
-        attachments: [attachment],
-      });
-      loueurSent = true;
-      console.log(`✅ [Email] Notification envoyée au loueur : ${data.loueurEmail}`);
+      let from = primarySender;
+      try {
+        await resend.emails.send({
+          from,
+          to: [data.loueurEmail],
+          subject: `[Matik] Nouvelle réservation #${data.bookingId} — ${data.equipmentName}`,
+          html: buildEmailHTML(data, 'loueur'),
+          attachments: [attachment],
+        });
+        loueurSent = true;
+        console.log(`✅ [Email] Notification envoyée au loueur : ${data.loueurEmail}`);
+      } catch (err: any) {
+        if (from !== fallbackSender && err?.message?.toLowerCase().includes('not verified')) {
+          await resend.emails.send({
+            from: fallbackSender,
+            to: [data.loueurEmail],
+            subject: `[Matik] Nouvelle réservation #${data.bookingId} — ${data.equipmentName}`,
+            html: buildEmailHTML(data, 'loueur'),
+            attachments: [attachment],
+          });
+          loueurSent = true;
+          console.log(`✅ [Email] Notification envoyée au loueur via ${fallbackSender}`);
+        } else {
+          throw err;
+        }
+      }
     } catch (err: any) {
       const msg = `Erreur envoi e-mail loueur (${data.loueurEmail}): ${err?.message || err}`;
       console.error(`❌ [Email]`, msg);
