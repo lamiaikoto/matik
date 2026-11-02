@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Equipment, LoueurProProfile, LoueurParticulierProfile, ClientProfile, CurrentUser, BookingRecord } from '../types';
 import { CounterpartContactCard } from './CounterpartContactCard';
+import { isEquipmentRented } from '../utils/availability';
 import {
   Building2,
   Plus,
@@ -1087,6 +1088,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                 <tbody className="divide-y divide-slate-100">
                   {filtered.map((item) => {
                     const isActive = item.isActive !== false;
+                    const rentInfo = isEquipmentRented(item.id, bookingList);
 
                     return (
                       <tr
@@ -1105,7 +1107,14 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                               className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0"
                             />
                             <div>
-                              <div className="font-bold text-slate-950 text-sm">{item.name}</div>
+                              <div className="font-bold text-slate-950 text-sm flex items-center gap-2">
+                                <span>{item.name}</span>
+                                {rentInfo.isRented && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-100 text-rose-800 border border-rose-300">
+                                    Loué
+                                  </span>
+                                )}
+                              </div>
                               <div className="text-[11px] text-slate-500 truncate max-w-[200px]">
                                 {item.specs?.[0]?.label}: {item.specs?.[0]?.value}
                               </div>
@@ -1131,20 +1140,28 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                           </div>
                         </td>
 
-                        {/* Status Toggle */}
+                        {/* Status Toggle & Rental availability */}
                         <td className="py-4 px-4">
-                          <button
-                            type="button"
-                            onClick={() => onToggleActive(item.id)}
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
-                              isActive
-                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                                : 'bg-slate-100 text-slate-600 border border-slate-200'
-                            }`}
-                          >
-                            <Power className="w-3 h-3" />
-                            <span>{isActive ? 'En ligne' : 'Désactivée'}</span>
-                          </button>
+                          <div className="flex flex-col gap-1.5 items-start">
+                            {rentInfo.isRented && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-rose-50 text-rose-800 border border-rose-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                <span>Loué {rentInfo.formattedEndDate ? `(fin: ${rentInfo.formattedEndDate})` : ''}</span>
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => onToggleActive(item.id)}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                                isActive
+                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                  : 'bg-slate-100 text-slate-600 border border-slate-200'
+                              }`}
+                            >
+                              <Power className="w-3 h-3" />
+                              <span>{isActive ? 'En ligne' : 'Désactivée'}</span>
+                            </button>
+                          </div>
                         </td>
 
                         {/* Actions (with QR Passport & État des lieux) */}

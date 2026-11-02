@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Equipment, BookingPayload, CurrentUser, ClientProfile } from '../types';
+import { Equipment, BookingPayload, CurrentUser, ClientProfile, BookingRecord } from '../types';
 import { submitBooking } from '../services/booking';
+import { getEquipmentAvailability } from '../utils/availability';
 import {
   Calendar,
   Clock,
@@ -17,11 +18,13 @@ import {
   Sparkles,
   ArrowRight,
   Zap,
+  Lock,
 } from 'lucide-react';
 
 interface BookingFormProps {
   equipmentList: Equipment[];
   selectedEquipment: Equipment;
+  bookingList?: BookingRecord[];
   onSelectEquipment: (equipment: Equipment) => void;
   onBookingSuccess: (payload: BookingPayload, fullDetails: {
     equipment: Equipment;
@@ -46,6 +49,7 @@ interface BookingFormProps {
 export const BookingForm: React.FC<BookingFormProps> = ({
   equipmentList,
   selectedEquipment,
+  bookingList = [],
   onSelectEquipment,
   onBookingSuccess,
   currentUser,
@@ -106,6 +110,9 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   const fraisService = Math.round((sousTotal * 0.10) * 100) / 100; // Frais de service et garantie Matik (10%)
   const totalLocation = Math.round((sousTotal + fraisService) * 100) / 100; // Total final TTC réglé par le client
 
+  // Disponibilité en temps réel de l'équipement sélectionné
+  const availability = getEquipmentAvailability(selectedEquipment, bookingList);
+
   // Calculate end date based on start date and duration
   const calculateEndDate = () => {
     try {
@@ -128,6 +135,15 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
+
+    // Blocage si l'équipement est actuellement loué
+    if (availability.isRented) {
+      setSubmitError(
+        `Cet équipement est actuellement loué jusqu'au ${availability.formattedEndDate}. Vous ne pouvez pas effectuer de nouvelle réservation pour le moment.`
+      );
+      return;
+    }
+
     setIsSubmitting(true);
 
     const fullClientNom = `${clientPrenom} ${clientNom}`.trim();
@@ -253,6 +269,23 @@ export const BookingForm: React.FC<BookingFormProps> = ({
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Alerte si le matériel est actuellement loué */}
+              {availability.isRented && (
+                <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-start gap-3 animate-in fade-in">
+                  <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <span className="font-bold uppercase tracking-wider text-rose-800 text-[11px] flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-rose-600" />
+                      Matériel actuellement indisponible à la location
+                    </span>
+                    <p className="leading-relaxed text-rose-700">
+                      « <strong>{selectedEquipment.name}</strong> » fait actuellement l'objet d'une réservation active jusqu'au{' '}
+                      <strong>{availability.formattedEndDate}</strong>. La validation de réservation est désactivée tant que la période de location en cours n'est pas terminée.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Auto-remplissage notification banner */}
               {currentUser ? (
                 <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-center justify-between gap-3 animate-in fade-in duration-200">
@@ -382,11 +415,15 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                   }}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-900 font-medium focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors cursor-pointer"
                 >
-                  {equipmentList.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name} — {item.dailyRate} € / jour (Caution : {item.depositAmount} €)
-                    </option>
-                  ))}
+                  {equipmentList.map((item) => {
+                    const itemAvail = getEquipmentAvailability(item, bookingList);
+                    return (
+                      <option key={item.id} value={item.id}>
+                        {item.name} — {item.dailyRate} € / jour (Caution : {item.depositAmount} €)
+                        {itemAvail.isRented ? ` [LOUÉ jusqu'au ${itemAvail.formattedEndDate}]` : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -466,10 +503,19 @@ export const BookingForm: React.FC<BookingFormProps> = ({
               <div className="pt-4">
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="w-full py-4 px-6 rounded-xl text-sm font-bold uppercase tracking-wider text-slate-950 bg-amber-400 hover:bg-amber-300 active:scale-99 disabled:opacity-75 disabled:cursor-not-allowed shadow-md shadow-amber-400/25 flex items-center justify-center gap-3 transition-all cursor-pointer"
+                  disabled={isSubmitting || availability.isRented}
+                  className={`w-full py-4 px-6 rounded-xl text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-3 transition-all ${
+                    availability.isRented
+                      ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none select-none'
+                      : 'text-slate-950 bg-amber-400 hover:bg-amber-300 active:scale-99 disabled:opacity-75 disabled:cursor-not-allowed shadow-md shadow-amber-400/25 cursor-pointer'
+                  }`}
                 >
-                  {isSubmitting ? (
+                  {availability.isRented ? (
+                    <>
+                      <Lock className="w-4 h-4 text-slate-400" />
+                      <span>Matériel actuellement loué · Réservation indisponible</span>
+                    </>
+                  ) : isSubmitting ? (
                     <>
                       <div className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
                       <span>Génération du contrat et sécurisation Stripe en cours...</span>

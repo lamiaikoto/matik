@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Equipment } from '../types';
+import { Equipment, BookingRecord } from '../types';
 import {
   Check,
   ShieldCheck,
@@ -12,12 +12,15 @@ import {
   MessageSquare,
   Eye,
   MapPin,
+  Lock,
 } from 'lucide-react';
 import { EQUIPMENT_CATEGORIES } from '../data/equipment';
+import { getEquipmentAvailability } from '../utils/availability';
 
 interface CatalogProps {
   equipmentList: Equipment[];
   selectedEquipmentId: string;
+  bookingList?: BookingRecord[];
   onSelectEquipment: (equipment: Equipment) => void;
   onAddNewEquipment: () => void;
   onOpenPassportModal?: (equipment: Equipment) => void;
@@ -27,6 +30,7 @@ interface CatalogProps {
 export const Catalog: React.FC<CatalogProps> = ({
   equipmentList,
   selectedEquipmentId,
+  bookingList = [],
   onSelectEquipment,
   onAddNewEquipment,
   onOpenPassportModal,
@@ -163,6 +167,7 @@ export const Catalog: React.FC<CatalogProps> = ({
             {filteredEquipment.map((item) => {
               const isSelected = selectedEquipmentId === item.id;
               const isParticulier = item.ownerType === 'particulier';
+              const availability = getEquipmentAvailability(item, bookingList);
 
               return (
                 <div
@@ -170,6 +175,8 @@ export const Catalog: React.FC<CatalogProps> = ({
                   className={`group flex flex-col justify-between rounded-2xl border bg-white overflow-hidden transition-all duration-300 ${
                     isSelected
                       ? 'border-amber-400 ring-2 ring-amber-400/60 shadow-xl shadow-amber-400/10 -translate-y-1'
+                      : availability.isRented
+                      ? 'border-rose-200/90 hover:border-rose-300 hover:shadow-lg'
                       : 'border-slate-200/90 hover:border-slate-300 hover:shadow-xl hover:-translate-y-1'
                   }`}
                 >
@@ -184,7 +191,9 @@ export const Catalog: React.FC<CatalogProps> = ({
                         alt={item.name}
                         referrerPolicy="no-referrer"
                         loading="lazy"
-                        className="w-full h-full object-cover object-center group-hover:scale-106 transition-transform duration-500 ease-out"
+                        className={`w-full h-full object-cover object-center group-hover:scale-106 transition-transform duration-500 ease-out ${
+                          availability.isRented ? 'grayscale-[25%] contrast-[0.95]' : ''
+                        }`}
                       />
 
                       {/* Gradient overlay on hover for image depth */}
@@ -204,10 +213,27 @@ export const Catalog: React.FC<CatalogProps> = ({
                         </span>
                       </div>
 
-                      {/* Top-right: Availability badge */}
-                      <div className="absolute top-3 right-3 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white/95 backdrop-blur-md text-emerald-700 border border-emerald-200/80 shadow-xs flex items-center gap-1.5 z-10">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <span>Disponible</span>
+                      {/* Top-right: Prominent Availability badge (Loué / Disponible / Indisponible) */}
+                      <div className="absolute top-3 right-3 z-10">
+                        {availability.isRented ? (
+                          <span
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-extrabold bg-rose-600/95 backdrop-blur-md text-white border border-rose-500 shadow-md flex items-center gap-1.5 tracking-wide animate-in fade-in"
+                            title={`Équipement loué jusqu'au ${availability.formattedEndDate}`}
+                          >
+                            <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                            <span>Loué {availability.formattedEndDate ? `· Jusqu'au ${availability.formattedEndDate}` : ''}</span>
+                          </span>
+                        ) : !availability.isAvailable ? (
+                          <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800/90 backdrop-blur-md text-slate-200 border border-slate-700 shadow-xs flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                            <span>{availability.badge.label}</span>
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white/95 backdrop-blur-md text-emerald-700 border border-emerald-200/80 shadow-xs flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span>Disponible</span>
+                          </span>
+                        )}
                       </div>
 
                       {/* Bottom-right: Quick View Pill */}
@@ -320,27 +346,48 @@ export const Catalog: React.FC<CatalogProps> = ({
 
                     {/* Actions: Direct "Réserver" Button + Review & Passport Triggers */}
                     <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => onSelectEquipment(item)}
-                        className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-slate-900 text-white shadow-md ring-2 ring-slate-900'
-                            : 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-sm shadow-amber-400/20 active:scale-98'
-                        }`}
-                      >
-                        {isSelected ? (
-                          <>
-                            <Check className="w-4 h-4 stroke-[3]" />
-                            <span>Sélectionné · Remplir formulaire</span>
-                          </>
-                        ) : (
-                          <>
-                            <span>Réserver cet équipement</span>
-                            <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
-                          </>
-                        )}
-                      </button>
+                      {availability.isRented ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="flex-1 py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 bg-slate-100 text-slate-400 border border-slate-200/90 cursor-not-allowed shadow-none select-none"
+                          title={`Équipement actuellement en cours de location jusqu'au ${availability.formattedEndDate}`}
+                        >
+                          <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate">Loué {availability.formattedEndDate ? `· Retour ${availability.formattedEndDate}` : ''}</span>
+                        </button>
+                      ) : !availability.isAvailable ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="flex-1 py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 bg-slate-100 text-slate-400 border border-slate-200/90 cursor-not-allowed shadow-none select-none"
+                        >
+                          <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>{availability.badge.label}</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onSelectEquipment(item)}
+                          className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-slate-900 text-white shadow-md ring-2 ring-slate-900'
+                              : 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-sm shadow-amber-400/20 active:scale-98'
+                          }`}
+                        >
+                          {isSelected ? (
+                            <>
+                              <Check className="w-4 h-4 stroke-[3]" />
+                              <span>Sélectionné · Remplir formulaire</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Réserver cet équipement</span>
+                              <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
+                            </>
+                          )}
+                        </button>
+                      )}
 
                       {/* Button to open reviews directly */}
                       {onViewDetails && (

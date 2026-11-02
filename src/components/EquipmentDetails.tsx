@@ -14,11 +14,13 @@ import {
   Clock,
   Info,
 } from 'lucide-react';
-import { Equipment, CurrentUser } from '../types';
+import { Equipment, CurrentUser, BookingRecord } from '../types';
 import { ReviewSystem } from './ReviewSystem';
+import { getEquipmentAvailability } from '../utils/availability';
 
 interface EquipmentDetailsProps {
   equipment: Equipment | null;
+  bookingList?: BookingRecord[];
   isOpen: boolean;
   onClose: () => void;
   onSelectBooking: (equipment: Equipment) => void;
@@ -28,6 +30,7 @@ interface EquipmentDetailsProps {
 
 export const EquipmentDetails: React.FC<EquipmentDetailsProps> = ({
   equipment,
+  bookingList = [],
   isOpen,
   onClose,
   onSelectBooking,
@@ -39,6 +42,7 @@ export const EquipmentDetails: React.FC<EquipmentDetailsProps> = ({
   if (!isOpen || !equipment) return null;
 
   const isParticulier = equipment.ownerType === 'particulier';
+  const availability = getEquipmentAvailability(equipment, bookingList);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-200">
@@ -116,9 +120,24 @@ export const EquipmentDetails: React.FC<EquipmentDetailsProps> = ({
                       referrerPolicy="no-referrer"
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute top-3 right-3 px-3 py-1 rounded-xl bg-white/95 backdrop-blur-md text-emerald-800 text-xs font-bold border border-emerald-200 shadow-sm flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      <span>Disponible immédiatement</span>
+                    {/* Top-right: Availability badge */}
+                    <div className="absolute top-3 right-3 z-10">
+                      {availability.isRented ? (
+                        <div className="px-3 py-1.5 rounded-xl bg-rose-600/95 backdrop-blur-md text-white text-xs font-black border border-rose-500 shadow-md flex items-center gap-1.5 tracking-wide animate-pulse">
+                          <span className="w-2 h-2 rounded-full bg-white" />
+                          <span>Loué {availability.formattedEndDate ? `· Jusqu'au ${availability.formattedEndDate}` : ''}</span>
+                        </div>
+                      ) : !availability.isAvailable ? (
+                        <div className="px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md text-slate-200 text-xs font-bold border border-slate-700 shadow-sm flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                          <span>{availability.badge.label}</span>
+                        </div>
+                      ) : (
+                        <div className="px-3 py-1.5 rounded-xl bg-white/95 backdrop-blur-md text-emerald-800 text-xs font-bold border border-emerald-200 shadow-sm flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                          <span>Disponible immédiatement</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -190,17 +209,38 @@ export const EquipmentDetails: React.FC<EquipmentDetailsProps> = ({
 
                   {/* Actions */}
                   <div className="space-y-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onClose();
-                        onSelectBooking(equipment);
-                      }}
-                      className="w-full py-3.5 px-4 rounded-xl text-xs font-extrabold uppercase tracking-wider text-slate-950 bg-amber-400 hover:bg-amber-300 active:scale-98 shadow-md shadow-amber-400/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <span>Réserver cet équipement</span>
-                      <ArrowRight className="w-4 h-4 stroke-[2.5]" />
-                    </button>
+                    {availability.isRented ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full py-3.5 px-4 rounded-xl text-xs font-extrabold uppercase tracking-wider text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed flex items-center justify-center gap-2 select-none"
+                        title={`Matériel actuellement loué jusqu'au ${availability.formattedEndDate}`}
+                      >
+                        <Lock className="w-4 h-4 text-slate-400" />
+                        <span>Matériel loué · Retour le {availability.formattedEndDate}</span>
+                      </button>
+                    ) : !availability.isAvailable ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full py-3.5 px-4 rounded-xl text-xs font-extrabold uppercase tracking-wider text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed flex items-center justify-center gap-2 select-none"
+                      >
+                        <Lock className="w-4 h-4 text-slate-400" />
+                        <span>{availability.badge.label}</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onSelectBooking(equipment);
+                        }}
+                        className="w-full py-3.5 px-4 rounded-xl text-xs font-extrabold uppercase tracking-wider text-slate-950 bg-amber-400 hover:bg-amber-300 active:scale-98 shadow-md shadow-amber-400/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <span>Réserver cet équipement</span>
+                        <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                      </button>
+                    )}
 
                     {onOpenPassport && (
                       <button

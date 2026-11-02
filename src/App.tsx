@@ -465,6 +465,7 @@ export default function App() {
             <Catalog
               equipmentList={equipmentList}
               selectedEquipmentId={selectedEquipment?.id || ''}
+              bookingList={bookingList}
               onSelectEquipment={handleSelectEquipment}
               onAddNewEquipment={handleAddNewEquipment}
               onOpenPassportModal={handleOpenPassportModal}
@@ -475,6 +476,7 @@ export default function App() {
               <BookingForm
                 equipmentList={equipmentList}
                 selectedEquipment={selectedEquipment}
+                bookingList={bookingList}
                 onSelectEquipment={setSelectedEquipment}
                 onBookingSuccess={handleBookingSuccess}
                 currentUser={currentUser}
@@ -499,6 +501,7 @@ export default function App() {
             <Catalog
               equipmentList={equipmentList}
               selectedEquipmentId={selectedEquipment?.id || ''}
+              bookingList={bookingList}
               onSelectEquipment={handleSelectEquipment}
               onAddNewEquipment={handleAddNewEquipment}
               onOpenPassportModal={handleOpenPassportModal}
@@ -513,6 +516,7 @@ export default function App() {
               <BookingForm
                 equipmentList={equipmentList}
                 selectedEquipment={selectedEquipment}
+                bookingList={bookingList}
                 onSelectEquipment={setSelectedEquipment}
                 onBookingSuccess={handleBookingSuccess}
                 currentUser={currentUser}
@@ -593,6 +597,7 @@ export default function App() {
         isOpen={isDetailsOpen}
         onClose={() => setIsDetailsOpen(false)}
         equipment={detailsEquipment}
+        bookingList={bookingList}
         onSelectBooking={handleSelectEquipment}
         onOpenPassport={handleOpenPassportModal}
         currentUser={currentUser}
