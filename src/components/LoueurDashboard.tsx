@@ -37,6 +37,8 @@ import {
   Star,
   MessageSquare,
   LogOut,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 interface LoueurDashboardProps {
@@ -58,6 +60,10 @@ interface LoueurDashboardProps {
     type: 'check_in' | 'check_out'
   ) => void;
   onReleaseCaution?: (bookingId: string) => void;
+  onEquipmentPostRestitutionAction?: (
+    equipmentId: string,
+    action: 'available' | 'hide' | 'delete'
+  ) => void;
   onOpenProfitSimulator?: () => void;
   onViewReviews?: (equipment: Equipment) => void;
 }
@@ -223,6 +229,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
   onOpenPassportModal,
   onOpenInspectionModal,
   onReleaseCaution,
+  onEquipmentPostRestitutionAction,
   onOpenProfitSimulator,
   onViewReviews,
 }) => {
@@ -1490,6 +1497,65 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                           )}
                         </div>
                       </div>
+
+                      {/* CONTRÔLE POST-RESTITUTION LOUEUR : DISPONIBILITÉ DU MATÉRIEL */}
+                      {isCompleted && (
+                        <div className="mt-3 pt-3 border-t border-slate-100 bg-slate-50/70 -mx-5 -mb-5 p-4 rounded-b-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-in fade-in duration-200">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                            <span className="text-slate-700 font-semibold">
+                              Matériel restitué · Statut du matériel pour les prochaines réservations :
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            {/* Action 1: Rendre à nouveau disponible */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onEquipmentPostRestitutionAction?.(booking.equipmentId, 'available');
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                              title="Réactive l'annonce sur le catalogue public immédiatement"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Rendre à nouveau disponible</span>
+                            </button>
+
+                            {/* Action 2: Désactiver / Masquer */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onEquipmentPostRestitutionAction?.(booking.equipmentId, 'hide');
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                              title="Conserve l'annonce dans votre espace mais la passe en brouillon masqué"
+                            >
+                              <EyeOff className="w-3.5 h-3.5 text-slate-500" />
+                              <span>Désactiver / Masquer</span>
+                            </button>
+
+                            {/* Action 3: Supprimer */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (
+                                  confirm(
+                                    `Supprimer définitivement l'annonce « ${booking.equipmentName} » de votre compte et du catalogue ?`
+                                  )
+                                ) {
+                                  onEquipmentPostRestitutionAction?.(booking.equipmentId, 'delete');
+                                }
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                              title="Supprime définitivement l'annonce de la base Supabase equipments"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                              <span>Supprimer</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

@@ -13,14 +13,17 @@ import {
   Eye,
   MapPin,
   Lock,
+  RefreshCw,
 } from 'lucide-react';
 import { EQUIPMENT_CATEGORIES } from '../data/equipment';
 import { getEquipmentAvailability } from '../utils/availability';
+import { CatalogSkeletonGrid } from './CatalogSkeletonGrid';
 
 interface CatalogProps {
   equipmentList: Equipment[];
   selectedEquipmentId: string;
   bookingList?: BookingRecord[];
+  isLoading?: boolean;
   onSelectEquipment: (equipment: Equipment) => void;
   onAddNewEquipment: () => void;
   onOpenPassportModal?: (equipment: Equipment) => void;
@@ -31,6 +34,7 @@ export const Catalog: React.FC<CatalogProps> = ({
   equipmentList,
   selectedEquipmentId,
   bookingList = [],
+  isLoading = false,
   onSelectEquipment,
   onAddNewEquipment,
   onOpenPassportModal,
@@ -129,9 +133,17 @@ export const Catalog: React.FC<CatalogProps> = ({
         {/* Results summary (only when there are items) */}
         {equipmentList.length > 0 && (
           <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
-            <span>
-              Affichage de <strong className="text-slate-900 font-bold">{filteredEquipment.length}</strong> équipement
-              {filteredEquipment.length > 1 ? 's' : ''} disponible{filteredEquipment.length > 1 ? 's' : ''}
+            <span className="flex items-center gap-2">
+              <span>
+                Affichage de <strong className="text-slate-900 font-bold">{filteredEquipment.length}</strong> équipement
+                {filteredEquipment.length > 1 ? 's' : ''} disponible{filteredEquipment.length > 1 ? 's' : ''}
+              </span>
+              {isLoading && (
+                <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                  <RefreshCw className="w-3 h-3 animate-spin text-amber-600" />
+                  <span>Synchronisation...</span>
+                </span>
+              )}
             </span>
             {selectedCategory !== 'Tous' && (
               <button
@@ -145,8 +157,10 @@ export const Catalog: React.FC<CatalogProps> = ({
           </div>
         )}
 
-        {/* Empty State when EQUIPMENT_LIST is empty or filtered result is empty */}
-        {filteredEquipment.length === 0 ? (
+        {/* Skeleton Grid pendant le chargement initial quand aucune annonce n'est encore disponible */}
+        {isLoading && filteredEquipment.length === 0 ? (
+          <CatalogSkeletonGrid count={8} />
+        ) : filteredEquipment.length === 0 ? (
           <div className="mt-12 py-16 px-6 max-w-xl mx-auto text-center bg-white border border-slate-200/90 rounded-2xl shadow-sm space-y-5">
             <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-50 border border-amber-200/80 flex items-center justify-center text-amber-600 shadow-xs">
               <PackageOpen className="w-8 h-8 stroke-[1.75]" />

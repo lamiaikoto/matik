@@ -51,7 +51,20 @@ const INITIAL_BOOKINGS: BookingRecord[] = [];
 export default function App() {
   const [currentPage, setCurrentPage] = useState<PageType>('accueil');
   const [currentUser, setCurrentUser] = useState<CurrentUser>(null);
-  const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
+  const [equipmentList, setEquipmentList] = useState<Equipment[]>(() => {
+    // Initialisation optimiste immédiate à partir du cache local
+    try {
+      const cached = localStorage.getItem('matik_equipment_list');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return [];
+  });
+  const [isEquipmentsLoading, setIsEquipmentsLoading] = useState(false);
   const [bookingList, setBookingList] = useState<BookingRecord[]>([]);
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
 
@@ -69,6 +82,7 @@ export default function App() {
 
   // Fonction centrale pour charger les équipements depuis Supabase (table equipments)
   const loadEquipmentsData = async (user?: CurrentUser) => {
+    setIsEquipmentsLoading(true);
     try {
       // 1. Récupération des annonces publiques (is_published = true) depuis la table Supabase
       const publicEqs = await fetchEquipmentsFromSupabase();
@@ -107,6 +121,8 @@ export default function App() {
       }
     } catch (err) {
       console.warn('[App loadEquipmentsData Warning]', err);
+    } finally {
+      setIsEquipmentsLoading(false);
     }
   };
 
@@ -416,6 +432,43 @@ export default function App() {
     });
   };
 
+  /**
+   * Action post-restitution loueur : Rendre disponible (réactiver), Masquer (désactiver), ou Supprimer l'annonce
+   */
+  const handlePostRestitutionEquipmentAction = async (
+    equipmentId: string,
+    action: 'available' | 'hide' | 'delete'
+  ) => {
+    if (action === 'available') {
+      // 1. Rendre à nouveau disponible : réactive et publie sur le catalogue public
+      setEquipmentList((prev) => {
+        const updated = prev.map((e) =>
+          e.id === equipmentId ? { ...e, isActive: true, is_published: true, inStock: true } : e
+        );
+        try {
+          localStorage.setItem('matik_equipment_list', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+      await updateEquipmentStatusInSupabase(equipmentId, true);
+    } else if (action === 'hide') {
+      // 2. Désactiver / Masquer : conserve dans l'espace personnel mais passe en is_published = false (brouillon)
+      setEquipmentList((prev) => {
+        const updated = prev.map((e) =>
+          e.id === equipmentId ? { ...e, isActive: false, is_published: false } : e
+        );
+        try {
+          localStorage.setItem('matik_equipment_list', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+      await updateEquipmentStatusInSupabase(equipmentId, false);
+    } else if (action === 'delete') {
+      // 3. Supprimer : supprime définitivement de la base Supabase et de la liste
+      await handleDeleteEquipment(equipmentId);
+    }
+  };
+
   // Scroll helpers
   const scrollToSection = (id: string) => {
     const el = document.getElementById(id);
@@ -574,6 +627,7 @@ export default function App() {
               equipmentList={equipmentList}
               selectedEquipmentId={selectedEquipment?.id || ''}
               bookingList={bookingList}
+              isLoading={isEquipmentsLoading}
               onSelectEquipment={handleSelectEquipment}
               onAddNewEquipment={handleAddNewEquipment}
               onOpenPassportModal={handleOpenPassportModal}
@@ -610,6 +664,7 @@ export default function App() {
               equipmentList={equipmentList}
               selectedEquipmentId={selectedEquipment?.id || ''}
               bookingList={bookingList}
+              isLoading={isEquipmentsLoading}
               onSelectEquipment={handleSelectEquipment}
               onAddNewEquipment={handleAddNewEquipment}
               onOpenPassportModal={handleOpenPassportModal}
@@ -654,6 +709,7 @@ export default function App() {
             onOpenPassportModal={handleOpenPassportModal}
             onOpenInspectionModal={handleOpenInspectionModal}
             onReleaseCaution={handleReleaseCaution}
+            onEquipmentPostRestitutionAction={handlePostRestitutionEquipmentAction}
             onOpenProfitSimulator={() => {
               setCurrentPage('accueil');
               setTimeout(() => scrollToSection('simulateur-rentabilite'), 50);
