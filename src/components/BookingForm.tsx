@@ -41,6 +41,13 @@ interface BookingFormProps {
     dureeJours: number;
     networkStatus: 'success' | 'cors_fallback' | 'simulated';
     stripeCheckoutUrl?: string | null;
+    contractPdfBase64?: string;
+    contractFilename?: string;
+    emailDeliveryStatus?: {
+      clientSent: boolean;
+      loueurSent: boolean;
+      errors?: string[];
+    };
   }) => void;
   currentUser?: CurrentUser;
   onOpenAuthModal?: () => void;
@@ -193,6 +200,12 @@ export const BookingForm: React.FC<BookingFormProps> = ({
 
       console.log('📋 [BookingForm] Résultat retourné par l\'API Matik :', result);
 
+      if (!result.success && result.status === 'error') {
+        console.error('❌ [BookingForm] Échec du traitement de la réservation :', result.message);
+        setSubmitError(result.message || 'Le serveur n\'a pas pu valider votre réservation. Veuillez réessayer.');
+        return;
+      }
+
       // Si aucune session n'est encore active, sauvegarder les coordonnées pour les réservations futures
       if (!currentUser && clientPrenom.trim() && clientNom.trim() && clientEmail.trim()) {
         const autoClient: ClientProfile = {
@@ -226,6 +239,9 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         dureeJours: Math.max(1, Number(dureeJours)),
         networkStatus: result.status === 'error' ? 'cors_fallback' : 'success',
         stripeCheckoutUrl: result.stripeCheckoutUrl,
+        contractPdfBase64: result.contract?.pdfBase64,
+        contractFilename: result.contract?.filename,
+        emailDeliveryStatus: result.email,
       });
     } catch (err: unknown) {
       console.error('[BookingForm] Erreur lors de la soumission de la réservation :', err);

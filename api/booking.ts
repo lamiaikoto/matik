@@ -677,6 +677,8 @@ export default async function handler(req: any, res: any) {
       contract: {
         generated: true,
         sizeBytes: pdfBuffer.length,
+        filename: `contrat-location-${bookingId}.pdf`,
+        pdfBase64: pdfBuffer.toString('base64'),
       },
       email: {
         clientSent: emailResult.clientSent,

@@ -52,10 +52,15 @@ export interface BookingResult {
   contract?: {
     generated: boolean;
     sizeBytes: number;
+    filename?: string;
+    pdfBase64?: string;
   };
   email?: {
     clientSent: boolean;
+    clientMessageId?: string | null;
     loueurSent: boolean;
+    loueurMessageId?: string | null;
+    errors?: string[];
   };
 }
 
