@@ -13,6 +13,7 @@ import {
   Check,
   Smartphone,
   Plus,
+  Layers,
 } from 'lucide-react';
 import { MatikLogo } from './MatikLogo';
 
@@ -39,10 +40,12 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const isLoueur = currentUser?.role === 'loueur_pro' || currentUser?.role === 'loueur_particulier';
+
   const navLinks: { id: PageType; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { id: 'accueil', label: 'Accueil', icon: Home },
     { id: 'catalogue', label: 'Catalogue', icon: Package },
-    { id: 'espace-loueur', label: 'Espace Loueur', icon: Building2 },
+    { id: 'espace-loueur', label: isLoueur ? 'Mes Annonces' : 'Espace Loueur', icon: isLoueur ? Layers : Building2 },
     { id: 'garanties', label: 'Garanties & Confiance', icon: ShieldCheck },
   ];
 
@@ -107,23 +110,40 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* User auth state */}
           {currentUser ? (
             <div className="flex items-center gap-1.5 sm:gap-2">
+              {/* Bouton direct "Mes Annonces" accessible en 1 clic */}
+              <button
+                type="button"
+                onClick={() => onNavigate('espace-loueur')}
+                title="Accéder directement à Mes Annonces et au Dashboard"
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  currentPage === 'espace-loueur'
+                    ? 'bg-amber-400 text-slate-950 font-black shadow-xs ring-1 ring-amber-500'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5 text-amber-600" />
+                <span className="hidden sm:inline">Mes Annonces</span>
+                <span className="sm:hidden">Annonces</span>
+              </button>
+
+              {/* Profil utilisateur */}
               <button
                 type="button"
                 onClick={() => onNavigate('espace-loueur')}
                 title="Accéder à votre espace"
-                className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-xs font-semibold text-slate-800 transition-colors cursor-pointer"
+                className="hidden lg:inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-800 transition-colors cursor-pointer"
               >
                 {currentUser.role === 'loueur_pro' ? (
                   <>
                     <Building2 className="w-3.5 h-3.5 text-amber-600" />
-                    <span className="max-w-[130px] truncate font-bold">
+                    <span className="max-w-[120px] truncate font-bold">
                       {currentUser.companyName}
                     </span>
                   </>
                 ) : currentUser.role === 'loueur_particulier' ? (
                   <>
                     <User className="w-3.5 h-3.5 text-emerald-600" />
-                    <span className="max-w-[130px] truncate font-bold">
+                    <span className="max-w-[120px] truncate font-bold">
                       {currentUser.prenom} {currentUser.nom}
                     </span>
                   </>
@@ -145,7 +165,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-red-50 hover:text-red-600 hover:border-red-200 border border-slate-200 text-xs font-bold text-slate-600 transition-all cursor-pointer group"
               >
                 <LogOut className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
-                <span className="hidden lg:inline">Déconnexion</span>
+                <span className="hidden xl:inline">Déconnexion</span>
               </button>
             </div>
           ) : (
@@ -153,10 +173,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               type="button"
               onClick={onOpenAuthModal}
-              className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs font-semibold text-slate-800 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs font-semibold text-slate-800 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Building2 className="w-3.5 h-3.5 text-amber-600" />
-              <span className="hidden sm:inline">Connexion / Inscription</span>
+              <span className="hidden sm:inline">Espace Loueur / Connexion</span>
               <span className="sm:hidden">Connexion</span>
             </button>
           )}
@@ -262,6 +282,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {currentUser.email && (
                   <div className="text-[11px] text-slate-500 truncate">{currentUser.email}</div>
                 )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onNavigate('espace-loueur');
+                  }}
+                  className="w-full py-2 px-3 rounded-lg text-xs font-extrabold text-slate-950 bg-amber-400 hover:bg-amber-300 transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-2xs mt-1"
+                >
+                  <Layers className="w-3.5 h-3.5 text-slate-950" />
+                  <span>Accéder à Mes Annonces</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => {

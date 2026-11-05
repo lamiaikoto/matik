@@ -39,12 +39,14 @@ import {
   LogOut,
   Eye,
   EyeOff,
+  Package,
 } from 'lucide-react';
 
 interface LoueurDashboardProps {
   currentUser: CurrentUser;
   equipmentList: Equipment[];
   bookingList?: BookingRecord[];
+  initialTab?: 'annonces' | 'reservations' | 'materiel';
   onOpenAddModal: () => void;
   onEditEquipment: (equipment: Equipment) => void;
   onToggleActive: (id: string) => void;
@@ -218,6 +220,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
   currentUser,
   equipmentList,
   bookingList = [],
+  initialTab,
   onOpenAddModal,
   onEditEquipment,
   onToggleActive,
@@ -233,9 +236,16 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
   onOpenProfitSimulator,
   onViewReviews,
 }) => {
-  const [dashboardTab, setDashboardTab] = useState<'materiel' | 'reservations'>(() => {
-    return currentUser?.role === 'client' ? 'reservations' : 'materiel';
+  const [dashboardTab, setDashboardTab] = useState<'annonces' | 'reservations' | 'materiel'>(() => {
+    if (initialTab) return initialTab;
+    return currentUser?.role === 'client' ? 'reservations' : 'annonces';
   });
+
+  useEffect(() => {
+    if (initialTab) {
+      setDashboardTab(initialTab);
+    }
+  }, [initialTab]);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Tous');
 
@@ -431,6 +441,10 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
   // Dans l'espace gestion loueur, afficher les équipements appartenant à ce compte
   const myEquipments = useMemo(() => {
     if (!currentUser?.id) return equipmentList;
+    const userOwned = equipmentList.filter(
+      (item) => item.ownerId === currentUser.id || (Boolean(currentUser.email) && item.ownerEmail === currentUser.email)
+    );
+    if (userOwned.length > 0) return userOwned;
     return equipmentList.filter((item) => !item.ownerId || item.ownerId === currentUser.id);
   }, [equipmentList, currentUser]);
 
@@ -443,7 +457,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
   });
 
   const totalCautionManaged = filtered.reduce((acc, item) => acc + item.depositAmount, 0);
-  const activeCount = filtered.filter((i) => i.isActive !== false).length;
+  const activeCount = filtered.filter((i) => i.isActive !== false && i.is_published !== false).length;
 
   return (
     <div className="py-10 lg:py-16 bg-[#F8FAFC] text-slate-900 min-h-[calc(100vh-80px)] font-sans">
@@ -1006,22 +1020,22 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
           </div>
         </div>
 
-        {/* SUB-TABS: MON PARC DE MATÉRIEL VS RÉSERVATIONS REÇUES */}
+        {/* SUB-TABS: MES ANNONCES VS RÉSERVATIONS REÇUES */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
           <div className="inline-flex p-1.5 bg-slate-200/80 rounded-2xl border border-slate-300/80 gap-1.5">
             <button
               type="button"
-              onClick={() => setDashboardTab('materiel')}
+              onClick={() => setDashboardTab('annonces')}
               className={`px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all duration-150 flex items-center gap-2 cursor-pointer ${
-                dashboardTab === 'materiel'
+                dashboardTab === 'annonces' || dashboardTab === 'materiel'
                   ? 'bg-white text-slate-950 shadow-sm ring-1 ring-slate-950/10'
                   : 'text-slate-600 hover:text-slate-950 hover:bg-white/50'
               }`}
             >
-              <Layers className="w-4 h-4 text-amber-600" />
-              <span>Mon Parc de Matériel</span>
-              <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-mono">
-                {equipmentList.length}
+              <Package className="w-4 h-4 text-amber-600" />
+              <span>Mes Annonces</span>
+              <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-mono font-bold">
+                {myEquipments.length}
               </span>
             </button>
 
@@ -1048,27 +1062,45 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
             </button>
           </div>
 
-          {/* Quick simulator shortcut */}
-          {onOpenProfitSimulator && (
+          <div className="flex items-center gap-2.5">
+            {/* Quick button to add equipment right from the tabs bar */}
             <button
               type="button"
-              onClick={onOpenProfitSimulator}
-              className="px-4 py-2.5 rounded-2xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
+              onClick={onOpenAddModal}
+              className="px-4 py-2.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs shrink-0"
+              title="Déposer une nouvelle annonce d'équipement"
             >
-              <Calculator className="w-4 h-4 text-amber-600" />
-              <span>Simuler la rentabilité de mon matériel</span>
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>+ Déposer une annonce</span>
             </button>
-          )}
+
+            {/* Quick simulator shortcut */}
+            {onOpenProfitSimulator && (
+              <button
+                type="button"
+                onClick={onOpenProfitSimulator}
+                className="hidden lg:flex px-4 py-2.5 rounded-2xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-xs font-bold transition-all items-center justify-center gap-2 cursor-pointer shrink-0"
+              >
+                <Calculator className="w-4 h-4 text-amber-600" />
+                <span>Simulateur</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* TAB 1: EQUIPMENT INVENTORY */}
-        {dashboardTab === 'materiel' ? (
+        {/* TAB 1: MES ANNONCES DÉPOSÉES */}
+        {dashboardTab === 'annonces' || dashboardTab === 'materiel' ? (
           <div className="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 space-y-6 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200">
               <div>
-                <h2 className="text-xl font-bold text-slate-950">Gestion de vos objets & matériel</h2>
-                <p className="text-xs text-slate-500">
-                  Ajustez les tarifs journaliers, fixez vos montants obligatoires de caution et générez les Passeports QR Code.
+                <div className="flex items-center gap-2.5">
+                  <h2 className="text-xl font-black text-slate-950">Mes Annonces Déposées</h2>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-200 font-mono">
+                    {filtered.length} {filtered.length > 1 ? 'annonces' : 'annonce'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Gérez vos annonces, modifiez vos tarifs et cautions, masquez ou supprimez vos équipements à tout moment.
                 </p>
               </div>
 
@@ -1077,7 +1109,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Rechercher un objet..."
+                  placeholder="Rechercher dans mes annonces..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-9 pr-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-amber-500"
@@ -1085,29 +1117,29 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
               </div>
             </div>
 
-            {/* Equipment Table */}
-            <div className="overflow-x-auto">
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-600 uppercase tracking-wider text-[10px] font-bold border-b border-slate-200">
                   <tr>
                     <th className="py-3 px-4">Équipement</th>
                     <th className="py-3 px-4">Catégorie</th>
                     <th className="py-3 px-4">Prix / Jour</th>
-                    <th className="py-3 px-4 text-amber-700">Caution fixée par vous</th>
+                    <th className="py-3 px-4 text-amber-700">Caution Stripe</th>
                     <th className="py-3 px-4">Statut Annonce</th>
-                    <th className="py-3 px-4 text-right">Outils & Actions</th>
+                    <th className="py-3 px-4 text-right">Actions rapides</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filtered.map((item) => {
-                    const isActive = item.isActive !== false;
+                    const isPublished = item.isActive !== false && item.is_published !== false;
                     const rentInfo = isEquipmentRented(item.id, bookingList);
 
                     return (
                       <tr
                         key={item.id}
                         className={`hover:bg-slate-50/80 transition-colors ${
-                          !isActive ? 'opacity-60 bg-slate-50/40' : ''
+                          !isPublished ? 'bg-slate-50/40 opacity-75' : ''
                         }`}
                       >
                         {/* Name & Photo */}
@@ -1122,11 +1154,6 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                             <div>
                               <div className="font-bold text-slate-950 text-sm flex items-center gap-2">
                                 <span>{item.name}</span>
-                                {rentInfo.isRented && (
-                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-100 text-rose-800 border border-rose-300">
-                                    Loué
-                                  </span>
-                                )}
                               </div>
                               <div className="text-[11px] text-slate-500 truncate max-w-[200px]">
                                 {item.specs?.[0]?.label}: {item.specs?.[0]?.value}
@@ -1153,93 +1180,124 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                           </div>
                         </td>
 
-                        {/* Status Toggle & Rental availability */}
+                        {/* Statut Annonce (Disponible, Masquée / Brouillon, En location) */}
                         <td className="py-4 px-4">
-                          <div className="flex flex-col gap-1.5 items-start">
-                            {rentInfo.isRented && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-rose-50 text-rose-800 border border-rose-200">
-                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                                <span>Loué {rentInfo.formattedEndDate ? `(fin: ${rentInfo.formattedEndDate})` : ''}</span>
-                              </span>
-                            )}
+                          {rentInfo.isRented ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-rose-50 text-rose-800 border border-rose-200 whitespace-nowrap">
+                              <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                              <span>En location</span>
+                              {rentInfo.formattedEndDate && (
+                                <span className="text-[10px] text-rose-600 font-semibold">
+                                  ({rentInfo.formattedEndDate})
+                                </span>
+                              )}
+                            </span>
+                          ) : !isPublished ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300 whitespace-nowrap">
+                              <EyeOff className="w-3.5 h-3.5 text-slate-500" />
+                              <span>Masquée / Brouillon</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 whitespace-nowrap">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                              <span>Disponible</span>
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Actions (Modifier, Masquer/Réactiver, Supprimer) */}
+                        <td className="py-4 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {/* Bouton Modifier */}
+                            <button
+                              type="button"
+                              onClick={() => onEditEquipment(item)}
+                              className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-amber-400 hover:text-slate-950 text-slate-700 transition-colors flex items-center gap-1 font-bold text-xs cursor-pointer shadow-2xs"
+                              title="Modifier les détails, prix ou caution de l'annonce"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Modifier</span>
+                            </button>
+
+                            {/* Bouton Masquer / Réactiver */}
                             <button
                               type="button"
                               onClick={() => onToggleActive(item.id)}
-                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
-                                isActive
-                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                                  : 'bg-slate-100 text-slate-600 border border-slate-200'
+                              className={`px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1 font-bold text-xs cursor-pointer border ${
+                                isPublished
+                                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
                               }`}
+                              title={
+                                isPublished
+                                  ? "Masquer l'annonce du catalogue public (conserve l'annonce en brouillon)"
+                                  : "Réactiver l'annonce pour la rendre visible sur le catalogue public"
+                              }
                             >
-                              <Power className="w-3 h-3" />
-                              <span>{isActive ? 'En ligne' : 'Désactivée'}</span>
+                              {isPublished ? (
+                                <>
+                                  <EyeOff className="w-3.5 h-3.5 text-slate-500" />
+                                  <span>Masquer</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>Réactiver</span>
+                                </>
+                              )}
                             </button>
-                          </div>
-                        </td>
 
-                        {/* Actions (with QR Passport & État des lieux) */}
-                        <td className="py-4 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {/* QR Passport Button */}
+                            {/* Bouton Supprimer avec confirmation explicite */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const ok = window.confirm(
+                                  `⚠️ Confirmer la suppression ?\n\nÊtes-vous sûr de vouloir supprimer définitivement l'annonce "${item.name}" ?\n\nCette action retirera le matériel du catalogue public et de la base de données Supabase de manière irréversible.`
+                                );
+                                if (ok) {
+                                  onDeleteEquipment(item.id);
+                                }
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 hover:text-red-800 border border-red-200 text-red-600 transition-colors flex items-center gap-1 font-bold text-xs cursor-pointer shadow-2xs"
+                              title="Supprimer définitivement cette annonce de Supabase"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                              <span>Supprimer</span>
+                            </button>
+
+                            {/* Utility icons */}
                             {onOpenPassportModal && (
                               <button
                                 type="button"
                                 onClick={() => onOpenPassportModal(item)}
-                                className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
                                 title="Voir & Imprimer le Passeport QR Code officiel"
                               >
-                                <QrCode className="w-4 h-4 text-slate-700" />
+                                <QrCode className="w-3.5 h-3.5 text-slate-700" />
                               </button>
                             )}
 
-                            {/* Inspection Button */}
                             {onOpenInspectionModal && (
                               <button
                                 type="button"
                                 onClick={() => onOpenInspectionModal(item, null, 'check_in')}
-                                className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
                                 title="Lancer un état des lieux photo (Check-in)"
                               >
-                                <Camera className="w-4 h-4 text-amber-600" />
+                                <Camera className="w-3.5 h-3.5 text-amber-600" />
                               </button>
                             )}
 
-                            {/* Reviews Button */}
                             {onViewReviews && (
                               <button
                                 type="button"
                                 onClick={() => onViewReviews(item)}
-                                className="p-2 rounded-lg bg-slate-100 hover:bg-amber-50 hover:border-amber-300 text-slate-700 hover:text-amber-900 transition-colors cursor-pointer"
+                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-50 hover:border-amber-300 text-slate-700 hover:text-amber-900 transition-colors cursor-pointer"
                                 title="Voir les avis locataires & notes 5 étoiles"
                               >
-                                <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
+                                <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
                               </button>
                             )}
-
-                            {/* Edit Button */}
-                            <button
-                              type="button"
-                              onClick={() => onEditEquipment(item)}
-                              className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-amber-400 hover:text-slate-950 text-slate-700 transition-colors flex items-center gap-1 font-semibold cursor-pointer"
-                              title="Modifier les tarifs ou le montant de la caution"
-                            >
-                              <Edit3 className="w-3.5 h-3.5 text-amber-600" />
-                              <span>Éditer</span>
-                            </button>
-
-                            {/* Delete Button */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (confirm(`Supprimer définitivement "${item.name}" ?`)) {
-                                  onDeleteEquipment(item.id);
-                                }
-                              }}
-                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-500 transition-colors cursor-pointer"
-                              title="Supprimer cette annonce"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
                           </div>
                         </td>
                       </tr>
@@ -1249,15 +1307,137 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
               </table>
             </div>
 
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-4">
+              {filtered.map((item) => {
+                const isPublished = item.isActive !== false && item.is_published !== false;
+                const rentInfo = isEquipmentRented(item.id, bookingList);
+
+                return (
+                  <div
+                    key={item.id}
+                    className="p-4 rounded-2xl border border-slate-200 bg-white shadow-2xs space-y-3"
+                  >
+                    <div className="flex items-start gap-3">
+                      <img
+                        src={item.image}
+                        alt={item.name}
+                        referrerPolicy="no-referrer"
+                        className="w-16 h-16 rounded-xl object-cover border border-slate-200 shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-slate-950 text-sm truncate">{item.name}</div>
+                        <div className="text-xs text-slate-500">{item.category}</div>
+                        <div className="flex items-center gap-3 mt-1.5 text-xs">
+                          <span className="font-extrabold text-slate-950">
+                            {item.dailyRate} € <span className="text-[10px] font-normal text-slate-500">/j</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1 font-bold text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/80 text-[11px]">
+                            <Lock className="w-3 h-3 text-amber-600" />
+                            {item.depositAmount} €
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Statut Badge */}
+                    <div className="pt-1">
+                      {rentInfo.isRented ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-rose-50 text-rose-800 border border-rose-200">
+                          <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                          <span>En location</span>
+                          {rentInfo.formattedEndDate && (
+                            <span className="text-[10px] text-rose-600 font-semibold">({rentInfo.formattedEndDate})</span>
+                          )}
+                        </span>
+                      ) : !isPublished ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                          <EyeOff className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Masquée / Brouillon</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                          <span>Disponible</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 3 Main Action Buttons on Mobile */}
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => onEditEquipment(item)}
+                        className="py-2 px-2 rounded-xl bg-slate-100 hover:bg-amber-400 hover:text-slate-950 text-slate-700 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Modifier</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onToggleActive(item.id)}
+                        className={`py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1 cursor-pointer border ${
+                          isPublished
+                            ? 'bg-slate-100 text-slate-700 border-slate-200'
+                            : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        }`}
+                      >
+                        {isPublished ? (
+                          <>
+                            <EyeOff className="w-3.5 h-3.5 text-slate-500" />
+                            <span>Masquer</span>
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Réactiver</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const ok = window.confirm(
+                            `⚠️ Confirmer la suppression ?\n\nÊtes-vous sûr de vouloir supprimer définitivement l'annonce "${item.name}" ?`
+                          );
+                          if (ok) {
+                            onDeleteEquipment(item.id);
+                          }
+                        }}
+                        className="py-2 px-2 rounded-xl bg-red-50 text-red-600 border border-red-200 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                        <span>Supprimer</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Empty state */}
             {filtered.length === 0 && (
-              <div className="text-center py-12 space-y-3">
-                <p className="text-sm text-slate-500">Aucun matériel ne correspond à votre filtre.</p>
+              <div className="text-center py-12 px-4 rounded-2xl bg-slate-50 border border-dashed border-slate-300 space-y-4">
+                <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center mx-auto">
+                  <Package className="w-6 h-6 text-amber-600" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-bold text-slate-900 text-base">Aucune annonce trouvée</h3>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    {searchQuery
+                      ? 'Aucun matériel ne correspond à votre recherche.'
+                      : "Vous n'avez pas encore déposé d'annonce de location de matériel."}
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={onOpenAddModal}
-                  className="px-4 py-2 rounded-xl bg-amber-400 text-slate-950 text-xs font-bold uppercase tracking-wider cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer shadow-xs inline-flex items-center gap-2"
                 >
-                  + Ajouter un matériel
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                  <span>Déposer ma première annonce</span>
                 </button>
               </div>
             )}
