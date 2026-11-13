@@ -109,7 +109,7 @@ export const Footer: React.FC<{
             <ul className="space-y-2">
               <li className="flex items-center gap-2">
                 <Mail className="w-3.5 h-3.5 text-amber-600" />
-                <span>contact@matik.fr</span>
+                <span>contact@matikilou.com</span>
               </li>
               <li className="flex items-center gap-2">
                 <Phone className="w-3.5 h-3.5 text-amber-600" />
