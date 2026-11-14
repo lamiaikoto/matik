@@ -733,6 +733,76 @@ export default async function handler(req: any, res: any) {
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
 
+    // ─── ACTION SPÉCIALE : LIBÉRATION D'EMPREINTE DE CAUTION STRIPE ───
+    if (body.action === 'release_caution') {
+      const paymentIntentId = String(body.paymentIntentId || body.payment_intent_id || '').trim();
+      const bookingId = String(body.bookingId || body.booking_id || '').trim();
+      console.log(`🔓 [Vercel API Booking] Demande de libération de caution pour la réservation ${bookingId} (PaymentIntent: ${paymentIntentId || 'aucun'})`);
+
+      const secretKey = process.env.STRIPE_SECRET_KEY;
+      if (!secretKey || !secretKey.trim()) {
+        console.warn('⚠️ [Stripe] STRIPE_SECRET_KEY non configurée — simulation de libération.');
+        return res.status(200).json({
+          success: true,
+          simulated: true,
+          message: 'Caution marquée comme libérée (mode simulation sans clé Stripe).',
+        });
+      }
+
+      try {
+        const stripe = new Stripe(secretKey.trim());
+        let canceledPaymentIntentId: string | null = null;
+
+        // 1. Si on a directement le paymentIntentId
+        if (paymentIntentId && paymentIntentId.startsWith('pi_')) {
+          const pi = await stripe.paymentIntents.cancel(paymentIntentId);
+          canceledPaymentIntentId = pi.id;
+          console.log(`✅ [Stripe] PaymentIntent ${pi.id} annulé avec succès.`);
+        } else if (body.sessionId && String(body.sessionId).startsWith('cs_')) {
+          // 2. Si on a le sessionId Checkout, récupérer le PaymentIntent associé
+          const session = await stripe.checkout.sessions.retrieve(String(body.sessionId));
+          if (session.payment_intent && typeof session.payment_intent === 'string') {
+            const pi = await stripe.paymentIntents.cancel(session.payment_intent);
+            canceledPaymentIntentId = pi.id;
+            console.log(`✅ [Stripe] PaymentIntent ${pi.id} récupéré via session et annulé avec succès.`);
+          }
+        } else if (bookingId) {
+          // 3. Recherche du PaymentIntent par métadonnées booking_id
+          const search = await stripe.paymentIntents.search({
+            query: `metadata['booking_id']:'${bookingId}' AND metadata['type']:'caution_empreinte_bancaire'`,
+          });
+          if (search.data.length > 0) {
+            const piToCancel = search.data[0];
+            if (piToCancel.status === 'requires_capture' || piToCancel.status === 'requires_payment_method') {
+              const pi = await stripe.paymentIntents.cancel(piToCancel.id);
+              canceledPaymentIntentId = pi.id;
+              console.log(`✅ [Stripe] PaymentIntent ${pi.id} trouvé via recherche et annulé.`);
+            }
+          }
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: 'Caution Stripe libérée avec succès (autorisation annulée sans débit).',
+          paymentIntentId: canceledPaymentIntentId,
+        });
+      } catch (stripeErr: any) {
+        console.error('❌ [Stripe] Erreur lors de l\'annulation du PaymentIntent :', stripeErr?.message || stripeErr);
+        // Si l'erreur indique qu'il a déjà été annulé ou expiré, on considère l'action réussie
+        if (stripeErr?.code === 'payment_intent_unexpected_state' || stripeErr?.message?.includes('canceled')) {
+          return res.status(200).json({
+            success: true,
+            message: 'Caution déjà libérée ou expirée sur Stripe.',
+            alreadyCanceled: true,
+          });
+        }
+        return res.status(500).json({
+          success: false,
+          error: stripeErr?.message || 'Erreur lors de la libération Stripe.',
+        });
+      }
+    }
+
     // ─── ACTION SPÉCIALE : ENVOI DE CONFIRMATION PAR E-MAIL APRÈS VALIDATION ───
     if (body.action === 'send_confirmation_email') {
       console.log(`📬 [Vercel API Booking] Demande d'envoi d'e-mail de confirmation pour ${body.bookingId}`);
@@ -907,6 +977,7 @@ export default async function handler(req: any, res: any) {
         cautionCheckoutUrl: stripeSessions.caution.checkoutUrl || null,
         paymentSessionId: stripeSessions.payment.sessionId || null,
         cautionSessionId: stripeSessions.caution.sessionId || null,
+        cautionPaymentIntentId: stripeSessions.caution.paymentIntentId || null,
         sessionId: stripeSessions.payment.sessionId || stripeSessions.caution.sessionId || null,
         error: stripeSessions.payment.error || stripeSessions.caution.error || null,
       },

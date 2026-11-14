@@ -53,6 +53,8 @@ export interface BookingResult {
   stripeCheckoutUrl?: string | null;
   stripePaymentUrl?: string | null;
   stripeCautionUrl?: string | null;
+  stripeCautionSessionId?: string | null;
+  stripeCautionPaymentIntentId?: string | null;
   contract?: {
     generated: boolean;
     sizeBytes: number;
@@ -198,6 +200,8 @@ export async function submitBooking(bookingData: BookingSubmissionData): Promise
       stripeCheckoutUrl: responseData?.stripe?.checkoutUrl || null,
       stripePaymentUrl: responseData?.stripe?.paymentCheckoutUrl || responseData?.stripe?.checkoutUrl || null,
       stripeCautionUrl: responseData?.stripe?.cautionCheckoutUrl || null,
+      stripeCautionSessionId: responseData?.stripe?.cautionSessionId || null,
+      stripeCautionPaymentIntentId: responseData?.stripe?.cautionPaymentIntentId || null,
       contract: responseData?.contract,
       email: responseData?.email,
     };
@@ -251,5 +255,36 @@ export async function sendConfirmationEmailAfterValidation(params: {
   } catch (e: any) {
     console.error('❌ [sendConfirmationEmailAfterValidation Error]', e);
     return { success: false, error: e?.message };
+  }
+}
+
+/**
+ * Libère l'empreinte de caution Stripe (cancel du PaymentIntent)
+ * lors de la validation contradictoire du retour du matériel.
+ */
+export async function releaseStripeCautionApi(params: {
+  bookingId?: string;
+  paymentIntentId?: string;
+  sessionId?: string;
+}): Promise<{ success: boolean; message?: string; error?: string }> {
+  try {
+    const apiUrl = `${getApiBaseUrl()}/booking`;
+    const res = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'release_caution',
+        ...params,
+      }),
+    });
+    const data = await res.json();
+    return {
+      success: !!data.success,
+      message: data.message,
+      error: data.error,
+    };
+  } catch (e: any) {
+    console.error('❌ [releaseStripeCautionApi Error]', e);
+    return { success: false, error: e?.message || 'Erreur réseau libération caution' };
   }
 }

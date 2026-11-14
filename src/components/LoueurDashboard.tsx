@@ -40,6 +40,7 @@ import {
   Eye,
   EyeOff,
   Package,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface LoueurDashboardProps {
@@ -62,6 +63,7 @@ interface LoueurDashboardProps {
     type: 'check_in' | 'check_out'
   ) => void;
   onReleaseCaution?: (bookingId: string) => void;
+  onDisputeCaution?: (bookingId: string, reason: string) => void;
   onEquipmentPostRestitutionAction?: (
     equipmentId: string,
     action: 'available' | 'hide' | 'delete'
@@ -232,6 +234,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
   onOpenPassportModal,
   onOpenInspectionModal,
   onReleaseCaution,
+  onDisputeCaution,
   onEquipmentPostRestitutionAction,
   onOpenProfitSimulator,
   onViewReviews,
@@ -1563,13 +1566,19 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                               className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold ${
                                 isCautionReleased
                                   ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                  : booking.stripeCautionStatus === 'litige_bloque'
+                                  ? 'bg-red-50 text-red-800 border border-red-200'
                                   : 'bg-amber-50 text-amber-900 border border-amber-200'
                               }`}
                             >
-                              <Lock className="w-3 h-3 text-amber-600" />
+                              <Lock className={`w-3 h-3 ${isCautionReleased ? 'text-emerald-600' : booking.stripeCautionStatus === 'litige_bloque' ? 'text-red-600' : 'text-amber-600'}`} />
                               <span>{booking.cautionAmount} €</span>
                               <span className="text-[10px] font-normal">
-                                {isCautionReleased ? '· Libérée' : '· Séquestre'}
+                                {isCautionReleased
+                                  ? '· Caution libérée'
+                                  : booking.stripeCautionStatus === 'litige_bloque'
+                                  ? '· Litige (bloquée)'
+                                  : '· Sous séquestre'}
                               </span>
                             </span>
                           </div>
@@ -1629,24 +1638,35 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                             </button>
                           )}
 
-                          {/* 1-Click Caution Release */}
-                          {onReleaseCaution && !isCautionReleased && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (
-                                  confirm(
-                                    `Confirmer la restitution conforme de l'équipement et libérer la caution Stripe de ${booking.cautionAmount} € ?`
-                                  )
-                                ) {
-                                  onReleaseCaution(booking.id);
-                                }
-                              }}
-                              className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-extrabold uppercase tracking-wide transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-                            >
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span>Libérer la caution</span>
-                            </button>
+                          {/* Badge d'état Caution Libérée (ou Litige) une fois terminé */}
+                          {isCautionReleased ? (
+                            <span className="px-3.5 py-2 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 font-extrabold text-xs flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Caution libérée</span>
+                            </span>
+                          ) : booking.stripeCautionStatus === 'litige_bloque' ? (
+                            <span className="px-3.5 py-2 rounded-xl bg-red-50 text-red-800 border border-red-200 font-extrabold text-xs flex items-center gap-1.5" title={booking.disputeReason}>
+                              <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
+                              <span>Caution bloquée (Litige)</span>
+                            </span>
+                          ) : (
+                            /* Option de signalement de litige rapide avant validation */
+                            onDisputeCaution && !isCompleted && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const reason = prompt("Précisez la nature de la retenue ou du litige constaté :");
+                                  if (reason && reason.trim()) {
+                                    onDisputeCaution(booking.id, reason.trim());
+                                  }
+                                }}
+                                className="px-3 py-2 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                                title="Signaler un dommage et retenir la caution sous séquestre"
+                              >
+                                <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
+                                <span>Signaler un litige</span>
+                              </button>
+                            )
                           )}
 
                           {/* Reviews Button on completed/active booking */}

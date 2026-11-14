@@ -34,7 +34,7 @@ import {
   subscribeToEquipments,
   generateUUID,
 } from './lib/equipmentService';
-import { sendConfirmationEmailAfterValidation } from './services/booking';
+import { sendConfirmationEmailAfterValidation, releaseStripeCautionApi } from './services/booking';
 import {
   Equipment,
   BookingPayload,
@@ -530,6 +530,25 @@ export default function App() {
 
   const handleSaveInspectionReport = (report: InspectionReport, releaseCaution?: boolean) => {
     if (report.bookingId) {
+      // Si c'est un check-out et qu'aucun litige n'est signalé (releaseCaution = true),
+      // déclencher l'annulation automatique du PaymentIntent Stripe de caution
+      if (releaseCaution) {
+        const targetBooking = bookingList.find((b) => b.id === report.bookingId);
+        releaseStripeCautionApi({
+          bookingId: report.bookingId,
+          paymentIntentId: targetBooking?.stripeCautionPaymentIntentId,
+          sessionId: targetBooking?.stripeCautionSessionId,
+        }).then((res) => {
+          if (res.success) {
+            console.log(`✅ [Stripe Caution Automatique] Caution libérée pour ${report.bookingId}`);
+          } else {
+            console.warn(`⚠️ [Stripe Caution Automatique] Problème libération Stripe :`, res.error);
+          }
+        }).catch((err) => {
+          console.error(`❌ [Stripe Caution Automatique] Erreur :`, err);
+        });
+      }
+
       setBookingList((prev) => {
         const updated = prev.map((b) => {
           if (b.id === report.bookingId) {
@@ -554,6 +573,13 @@ export default function App() {
   };
 
   const handleReleaseCaution = (bookingId: string) => {
+    const targetBooking = bookingList.find((b) => b.id === bookingId);
+    releaseStripeCautionApi({
+      bookingId,
+      paymentIntentId: targetBooking?.stripeCautionPaymentIntentId,
+      sessionId: targetBooking?.stripeCautionSessionId,
+    }).catch((e) => console.warn('Erreur libération Stripe :', e));
+
     setBookingList((prev) => {
       const updated = prev.map((b) => {
         if (b.id === bookingId) {
@@ -561,6 +587,26 @@ export default function App() {
             ...b,
             status: 'restitue' as const,
             stripeCautionStatus: 'caution_liberee' as const,
+          };
+        }
+        return b;
+      });
+      try {
+        localStorage.setItem('matik_bookings', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const handleDisputeCaution = (bookingId: string, reason: string) => {
+    setBookingList((prev) => {
+      const updated = prev.map((b) => {
+        if (b.id === bookingId) {
+          return {
+            ...b,
+            stripeCautionStatus: 'litige_bloque' as const,
+            disputeReason: reason,
+            disputedAt: new Date().toISOString(),
           };
         }
         return b;
@@ -657,6 +703,8 @@ export default function App() {
       stripeCheckoutUrl?: string | null;
       stripePaymentUrl?: string | null;
       stripeCautionUrl?: string | null;
+      stripeCautionSessionId?: string | null;
+      stripeCautionPaymentIntentId?: string | null;
     }
   ) => {
     setLastPayload(payload);
@@ -687,6 +735,8 @@ export default function App() {
       status: 'en_attente_remise',
       stripeCautionStatus: 'sequestre_sans_debit',
       stripeCautionUrl: details.stripeCautionUrl || undefined,
+      stripeCautionSessionId: details.stripeCautionSessionId || undefined,
+      stripeCautionPaymentIntentId: details.stripeCautionPaymentIntentId || undefined,
       createdAt: new Date().toISOString(),
     };
 
@@ -862,6 +912,7 @@ export default function App() {
             onOpenPassportModal={handleOpenPassportModal}
             onOpenInspectionModal={handleOpenInspectionModal}
             onReleaseCaution={handleReleaseCaution}
+            onDisputeCaution={handleDisputeCaution}
             onEquipmentPostRestitutionAction={handlePostRestitutionEquipmentAction}
             onOpenProfitSimulator={() => {
               setCurrentPage('accueil');

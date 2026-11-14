@@ -42,6 +42,8 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
   const [functionalStatus, setFunctionalStatus] = useState<'conforme' | 'remarque'>('conforme');
   const [notes, setNotes] = useState('');
   const [validatedByBoth, setValidatedByBoth] = useState(false);
+  const [hasDispute, setHasDispute] = useState(false);
+  const [disputeReason, setDisputeReason] = useState('');
   const [isSuccessStep, setIsSuccessStep] = useState(false);
 
   if (!isOpen || (!equipment && !booking)) return null;
@@ -77,6 +79,8 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
     e.preventDefault();
     const photos = [photo1, photo2, photo3].filter(Boolean);
 
+    const shouldReleaseCaution = type === 'check_out' && !hasDispute;
+
     const report: InspectionReport = {
       id: `report-${Date.now()}`,
       bookingId: booking?.id || `sim-${Date.now()}`,
@@ -84,14 +88,14 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
       timestamp: new Date().toISOString(),
       photos: photos.length > 0 ? photos : [equipment?.image || ''],
       cleanliness,
-      functionalStatus,
-      notes: notes.trim(),
+      functionalStatus: hasDispute ? 'remarque' : functionalStatus,
+      notes: hasDispute && disputeReason ? `[LITIGE SIGNALÉ] ${disputeReason} - ${notes.trim()}` : notes.trim(),
       validatedByOwner: true,
       validatedByTenant: true,
-      cautionReleased: type === 'check_out',
+      cautionReleased: shouldReleaseCaution,
     };
 
-    onSaveReport(report, type === 'check_out');
+    onSaveReport(report, shouldReleaseCaution);
     setIsSuccessStep(true);
   };
 
@@ -147,7 +151,9 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
         {/* Content */}
         {isSuccessStep ? (
           <div className="p-8 text-center space-y-6 my-auto">
-            <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto ${
+              hasDispute ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'
+            }`}>
               <CheckCircle2 className="w-10 h-10" />
             </div>
 
@@ -155,12 +161,16 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
               <h4 className="text-2xl font-black text-slate-950">
                 {type === 'check_in'
                   ? "État des lieux de départ validé !"
+                  : hasDispute
+                  ? "Retour enregistré & Litige signalé"
                   : "Restitution conforme & Caution libérée !"}
               </h4>
               <p className="text-xs sm:text-sm text-slate-600">
                 {type === 'check_in'
                   ? `Les photos horodatées sont annexées au contrat. La couverture Matik et l'empreinte de caution de ${cautionAmount} € sont officiellement actives.`
-                  : `L'attestation de restitution a été générée. L'empreinte bancaire Stripe de ${cautionAmount} € a été levée sans aucun prélèvement sur le compte du locataire.`}
+                  : hasDispute
+                  ? `Le dossier de litige a été ouvert avec les photos contradictoires. L'empreinte de caution de ${cautionAmount} € reste sous séquestre Stripe le temps de l'évaluation.`
+                  : `L'attestation de restitution a été générée. L'empreinte bancaire Stripe de ${cautionAmount} € a été levée automatiquement sans aucun débit sur le compte du locataire.`}
               </p>
             </div>
 
@@ -377,6 +387,44 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
               </div>
             </div>
 
+            {/* Option Signalement de litige (seulement en check-out) */}
+            {type === 'check_out' && (
+              <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-3">
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={hasDispute}
+                    onChange={(e) => setHasDispute(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded text-red-600 focus:ring-red-400"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-red-900 block">
+                      Signaler un dommage / litige (bloquer la caution)
+                    </span>
+                    <span className="text-[11px] text-amber-800 leading-relaxed block mt-0.5">
+                      Cochez cette case si le matériel présente une dégradation anormale ou une non-conformité. La caution de {cautionAmount} € ne sera pas libérée et restera sous séquestre pour instruction.
+                    </span>
+                  </div>
+                </label>
+
+                {hasDispute && (
+                  <div className="space-y-1.5 pt-1">
+                    <label className="text-xs font-bold text-red-950">
+                      Motif du litige / Description du dommage constaté :
+                    </label>
+                    <input
+                      type="text"
+                      required={hasDispute}
+                      value={disputeReason}
+                      onChange={(e) => setDisputeReason(e.target.value)}
+                      placeholder="Ex: Moteur calé suite à choc, carter fissuré nécessitant devis..."
+                      className="w-full h-11 px-3.5 text-xs text-slate-900 bg-white rounded-xl border border-red-300 focus:outline-none focus:border-red-500"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Validation Checkbox */}
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
               <label className="flex items-start gap-3 cursor-pointer select-none">
@@ -416,6 +464,8 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
                 <span>
                   {type === 'check_in'
                     ? "Valider le départ & Activer la caution Stripe"
+                    : hasDispute
+                    ? "Valider le retour & Bloquer la caution pour litige"
                     : "Valider le retour & Libérer la caution Stripe"}
                 </span>
               </button>
