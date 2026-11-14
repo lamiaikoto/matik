@@ -16,6 +16,9 @@ import {
   Layers,
 } from 'lucide-react';
 import { MatikLogo } from './MatikLogo';
+import { LocaleSelector, LocaleSelectorMobile } from './LocaleSelector';
+import { useLocale } from '../context/LocaleContext';
+import { useTranslation } from 'react-i18next';
 
 interface NavbarProps {
   currentPage: PageType;
@@ -39,15 +42,20 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { t } = useTranslation();
+  const { lang } = useLocale();
 
   const isLoueur = currentUser?.role === 'loueur_pro' || currentUser?.role === 'loueur_particulier';
 
   const navLinks: { id: PageType; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-    { id: 'accueil', label: 'Accueil', icon: Home },
-    { id: 'catalogue', label: 'Catalogue', icon: Package },
-    { id: 'espace-loueur', label: isLoueur ? 'Mes Annonces' : 'Espace Loueur', icon: isLoueur ? Layers : Building2 },
-    { id: 'garanties', label: 'Garanties & Confiance', icon: ShieldCheck },
+    { id: 'accueil', label: t('nav.home'), icon: Home },
+    { id: 'catalogue', label: t('nav.catalogue'), icon: Package },
+    { id: 'espace-loueur', label: isLoueur ? t('nav.myListings') : t('nav.loueurSpace'), icon: isLoueur ? Layers : Building2 },
+    { id: 'garanties', label: t('nav.guarantees'), icon: ShieldCheck },
   ];
+
+  // unused var suppressed
+  void lang;
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200/90 bg-white/95 backdrop-blur-md shadow-xs">
@@ -91,7 +99,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           })}
         </nav>
 
-        {/* Zone 3: Bouton Déposer une annonce + Connexion / Profil + CTA Réserver */}
+        {/* Zone 3: Bouton Déposer une annonce + Locale Selector + Connexion / Profil + CTA Réserver */}
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
           {/* Bouton direct "Déposer une annonce" accessible à tout moment */}
           {onOpenAddEquipment && (
@@ -102,10 +110,15 @@ export const Navbar: React.FC<NavbarProps> = ({
               title="Ajouter un article ou équipement à la location"
             >
               <Plus className="w-3.5 h-3.5 text-amber-600 group-hover:scale-110 transition-transform stroke-[2.5]" />
-              <span className="hidden sm:inline">Déposer une annonce</span>
-              <span className="sm:hidden">Déposer</span>
+              <span className="hidden sm:inline">{t('nav.listItem')}</span>
+              <span className="sm:hidden">+</span>
             </button>
           )}
+
+          {/* Sélecteur Langue & Devise (desktop) */}
+          <div className="hidden md:block">
+            <LocaleSelector compact />
+          </div>
 
           {/* User auth state */}
           {currentUser ? (
@@ -122,8 +135,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
               >
                 <Layers className="w-3.5 h-3.5 text-amber-600" />
-                <span className="hidden sm:inline">Mes Annonces</span>
-                <span className="sm:hidden">Annonces</span>
+                <span className="hidden sm:inline">{t('nav.myAnnouncements')}</span>
+                <span className="sm:hidden">{t('nav.announcements')}</span>
               </button>
 
               {/* Profil utilisateur */}
@@ -161,11 +174,11 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 type="button"
                 onClick={onLogout}
-                title="Déconnexion (changer de compte)"
+                title={t('nav.logoutChange')}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-red-50 hover:text-red-600 hover:border-red-200 border border-slate-200 text-xs font-bold text-slate-600 transition-all cursor-pointer group"
               >
                 <LogOut className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
-                <span className="hidden xl:inline">Déconnexion</span>
+                <span className="hidden xl:inline">{t('nav.logout')}</span>
               </button>
             </div>
           ) : (
@@ -176,8 +189,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs font-semibold text-slate-800 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Building2 className="w-3.5 h-3.5 text-amber-600" />
-              <span className="hidden sm:inline">Espace Loueur / Connexion</span>
-              <span className="sm:hidden">Connexion</span>
+              <span className="hidden sm:inline">{t('nav.loginSignup')}</span>
+              <span className="sm:hidden">{t('nav.login')}</span>
             </button>
           )}
 
@@ -187,7 +200,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={onOpenBooking}
             className="inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-950 bg-amber-400 hover:bg-amber-300 active:scale-98 rounded-xl shadow-sm shadow-amber-400/25 hover:shadow-md hover:shadow-amber-400/35 transition-all duration-150 whitespace-nowrap shrink-0 cursor-pointer"
           >
-            <span>Réserver</span>
+            <span>{t('nav.book')}</span>
             <ArrowRight className="w-4 h-4 shrink-0 stroke-[2.5]" />
           </button>
 

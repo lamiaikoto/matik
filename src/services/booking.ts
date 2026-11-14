@@ -21,6 +21,8 @@ export interface BookingSubmissionData {
   loueurNom?: string;
   loueurEmail?: string;
   loueurTelephone?: string;
+  loueurStripeAccountId?: string;
+  stripeAccountId?: string;
 
   // Dates et durée
   startDate: string;
@@ -49,6 +51,8 @@ export interface BookingResult {
   bookingId?: string;
   payload: BookingPayload;
   stripeCheckoutUrl?: string | null;
+  stripePaymentUrl?: string | null;
+  stripeCautionUrl?: string | null;
   contract?: {
     generated: boolean;
     sizeBytes: number;
@@ -112,6 +116,8 @@ export async function submitBooking(bookingData: BookingSubmissionData): Promise
     loueurNom,
     loueurEmail,
     loueurTelephone,
+    loueurStripeAccountId: bookingData.loueurStripeAccountId || bookingData.stripeAccountId || '',
+    stripeAccountId: bookingData.stripeAccountId || bookingData.loueurStripeAccountId || '',
     startDate: bookingData.startDate,
     endDate: bookingData.endDate,
     dureeJours: Math.max(1, Number(bookingData.dureeJours)),
@@ -190,6 +196,8 @@ export async function submitBooking(bookingData: BookingSubmissionData): Promise
       bookingId: responseData?.bookingId,
       payload: responseData?.payload || fallbackPayload,
       stripeCheckoutUrl: responseData?.stripe?.checkoutUrl || null,
+      stripePaymentUrl: responseData?.stripe?.paymentCheckoutUrl || responseData?.stripe?.checkoutUrl || null,
+      stripeCautionUrl: responseData?.stripe?.cautionCheckoutUrl || null,
       contract: responseData?.contract,
       email: responseData?.email,
     };

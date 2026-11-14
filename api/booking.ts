@@ -42,6 +42,8 @@ export interface EmailData {
   totalLocation: number;
   montantCaution: number;
   stripeCheckoutUrl?: string;
+  stripePaymentUrl?: string;
+  stripeCautionUrl?: string;
 }
 
 export interface StripeHoldData {
@@ -53,6 +55,8 @@ export interface StripeHoldData {
   montantCaution: number;
   totalLocation: number;
   appUrl: string;
+  /** ID du compte Stripe Connect du loueur (optionnel) */
+  loueurStripeAccountId?: string;
 }
 
 export interface StripeHoldResult {
@@ -61,6 +65,21 @@ export interface StripeHoldResult {
   checkoutUrl?: string;
   paymentIntentId?: string;
   error?: string;
+}
+
+export interface StripePaymentResult {
+  success: boolean;
+  sessionId?: string;
+  checkoutUrl?: string;
+  paymentIntentId?: string;
+  error?: string;
+}
+
+export interface StripeSessionsResult {
+  /** Session d'encaissement réel de la location */
+  payment: StripePaymentResult;
+  /** Session d'empreinte de caution (non débitée) */
+  caution: StripeHoldResult;
 }
 
 // ─── 1. GÉNÉRATION CONTRAT PDF ──────────────────────────────
@@ -224,14 +243,33 @@ function buildEmailHTML(data: EmailData, role: 'client' | 'loueur'): string {
     ? `Votre réservation pour <strong>${data.equipmentName}</strong> a bien été enregistrée.`
     : `Une nouvelle réservation a été effectuée pour votre matériel <strong>${data.equipmentName}</strong>.`;
 
-  const stripeBlock = isClient && data.stripeCheckoutUrl
-    ? `<tr><td style="padding:24px 0;">
-         <a href="${data.stripeCheckoutUrl}" style="display:inline-block;padding:14px 28px;background:#F59E0B;color:#0F172A;font-weight:800;text-decoration:none;border-radius:10px;font-size:14px;letter-spacing:0.5px;">
-           ✦ Valider mon empreinte de caution Stripe (${data.montantCaution} €)
+  const paymentCta = isClient && data.stripePaymentUrl
+    ? `<tr><td style="padding:16px 0 8px;">
+         <a href="${data.stripePaymentUrl}" style="display:inline-block;padding:14px 28px;background:#10B981;color:#FFFFFF;font-weight:800;text-decoration:none;border-radius:10px;font-size:14px;letter-spacing:0.5px;">
+           💳 Régler les frais de location (${data.totalLocation.toFixed(2)} €)
          </a>
-         <p style="margin-top:8px;font-size:11px;color:#64748B;">Empreinte bancaire sécurisée — aucun montant débité.</p>
+         <p style="margin-top:6px;font-size:11px;color:#64748B;">Paiement sécurisé Stripe direct loueur & commission Matik.</p>
        </td></tr>`
     : '';
+
+  const cautionCta = isClient && data.stripeCautionUrl
+    ? `<tr><td style="padding:8px 0 16px;">
+         <a href="${data.stripeCautionUrl}" style="display:inline-block;padding:12px 24px;background:#F59E0B;color:#0F172A;font-weight:700;text-decoration:none;border-radius:10px;font-size:13px;letter-spacing:0.5px;">
+           ✦ Valider l'empreinte de caution (${data.montantCaution.toFixed(2)} €)
+         </a>
+         <p style="margin-top:6px;font-size:11px;color:#64748B;">Empreinte bancaire sécurisée (non débitée).</p>
+       </td></tr>`
+    : '';
+
+  const fallbackCta = isClient && !data.stripePaymentUrl && data.stripeCheckoutUrl
+    ? `<tr><td style="padding:16px 0;">
+         <a href="${data.stripeCheckoutUrl}" style="display:inline-block;padding:14px 28px;background:#F59E0B;color:#0F172A;font-weight:800;text-decoration:none;border-radius:10px;font-size:14px;letter-spacing:0.5px;">
+           ✦ Valider mon paiement / caution Stripe
+         </a>
+       </td></tr>`
+    : '';
+
+  const stripeBlock = `${paymentCta}${cautionCta}${fallbackCta}`;
 
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -449,11 +487,125 @@ async function sendBookingEmails(
   return { clientSent, loueurSent, clientMessageId, loueurMessageId, errors };
 }
 
-// ─── 3. GESTION STRIPE (CAUTION SANS DÉBIT) ───────────────────
-async function createStripeCheckoutSession(data: StripeHoldData): Promise<StripeHoldResult> {
+// ─── 3a. STRIPE — ENCAISSEMENT RÉEL DE LA LOCATION ──────────
+/**
+ * Crée une session Stripe Checkout pour l'encaissement réel des frais de location.
+ *
+ * - mode: 'payment' avec capture_method: 'automatic' (débit immédiat)
+ * - application_fee_amount : 10 % des frais de service Matik (en centimes)
+ * - transfer_data.destination : compte Stripe Connect du loueur (si disponible)
+ *
+ * Si le loueur n'a pas encore de compte Connect, le paiement est encaissé sur
+ * le compte Matik principal et le virement peut être déclenché manuellement.
+ */
+async function createStripePaymentSession(data: StripeHoldData): Promise<StripePaymentResult> {
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey || !secretKey.trim()) {
-    console.warn('⚠️ [Stripe] STRIPE_SECRET_KEY non configurée — session Stripe ignorée.');
+    console.warn('⚠️ [Stripe] STRIPE_SECRET_KEY non configurée — session paiement ignorée.');
+    return { success: true };
+  }
+
+  try {
+    const stripe = new Stripe(secretKey.trim());
+    const totalCents = Math.round(data.totalLocation * 100);
+
+    if (totalCents <= 0) {
+      console.log('ℹ️ [Stripe Payment] Montant nul, session paiement ignorée.');
+      return { success: true };
+    }
+
+    // Commission Matik : 10 % du total HT de location (arrondi en centimes)
+    const applicationFeeCents = Math.round(totalCents * 0.10);
+
+    // URL de redirection vers la caution après succès du paiement
+    const cautionRedirectUrl = `${data.appUrl}?stripe_status=payment_ok&booking_id=${data.bookingId}&next=caution`;
+
+    // Paramètres de transfer Connect (uniquement si le loueur possède un compte Stripe Connect)
+    const hasConnectAccount = !!(data.loueurStripeAccountId && data.loueurStripeAccountId.startsWith('acct_'));
+
+    type PaymentIntentParams = {
+      capture_method: 'automatic';
+      description: string;
+      metadata: Record<string, string>;
+      application_fee_amount?: number;
+      transfer_data?: { destination: string };
+    };
+
+    const paymentIntentData: PaymentIntentParams = {
+      capture_method: 'automatic',
+      description: `Location Matik — ${data.equipmentName} (Réf: ${data.bookingId})`,
+      metadata: {
+        booking_id: data.bookingId,
+        equipment_id: data.equipmentId,
+        equipment_name: data.equipmentName,
+        client_email: data.clientEmail,
+        type: 'location_payment',
+      },
+    };
+
+    if (hasConnectAccount) {
+      paymentIntentData.application_fee_amount = applicationFeeCents;
+      paymentIntentData.transfer_data = { destination: data.loueurStripeAccountId as string };
+      console.log(`💸 [Stripe Payment] Transfer Connect vers ${data.loueurStripeAccountId}, commission = ${(applicationFeeCents / 100).toFixed(2)} €`);
+    } else {
+      console.log('ℹ️ [Stripe Payment] Pas de compte Connect loueur — paiement encaissé sur compte Matik principal.');
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      customer_email: data.clientEmail,
+      payment_intent_data: paymentIntentData,
+      line_items: [
+        {
+          price_data: {
+            currency: 'eur',
+            product_data: {
+              name: `Location — ${data.equipmentName}`,
+              description: `Frais de location Matik. Réf: ${data.bookingId}`,
+            },
+            unit_amount: totalCents,
+          },
+          quantity: 1,
+        },
+      ],
+      metadata: {
+        booking_id: data.bookingId,
+        equipment_id: data.equipmentId,
+        type: 'matik_location_payment',
+        loueur_stripe_account: data.loueurStripeAccountId || 'none',
+        application_fee_cents: String(applicationFeeCents),
+      },
+      success_url: `${cautionRedirectUrl}&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${data.appUrl}?stripe_status=cancel&booking_id=${data.bookingId}`,
+      expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
+    });
+
+    console.log(`✅ [Stripe Payment] Session paiement créée : ${session.id} (${data.totalLocation} €, commission ${(applicationFeeCents / 100).toFixed(2)} €)`);
+
+    return {
+      success: true,
+      sessionId: session.id,
+      checkoutUrl: session.url || undefined,
+      paymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : undefined,
+    };
+  } catch (err: any) {
+    console.error('❌ [Stripe Payment] Erreur session paiement :', err?.message || err);
+    return { success: false, error: err?.message || 'Erreur Stripe paiement' };
+  }
+}
+
+// ─── 3b. STRIPE — EMPREINTE DE CAUTION (NON DÉBITÉE) ─────────
+/**
+ * Crée une session Stripe Checkout pour l'empreinte bancaire de caution.
+ *
+ * - mode: 'payment' avec capture_method: 'manual' (autorisation sans débit)
+ * - Le montant est pré-autorisé mais jamais capturé automatiquement
+ * - Peut être capturé (en cas de litige) ou libéré après restitution
+ */
+async function createStripeCautionSession(data: StripeHoldData): Promise<StripeHoldResult> {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey || !secretKey.trim()) {
+    console.warn('⚠️ [Stripe] STRIPE_SECRET_KEY non configurée — session caution ignorée.');
     return { success: true };
   }
 
@@ -497,12 +649,12 @@ async function createStripeCheckoutSession(data: StripeHoldData): Promise<Stripe
         equipment_id: data.equipmentId,
         type: 'matik_caution_hold',
       },
-      success_url: `${data.appUrl}?stripe_status=success&booking_id=${data.bookingId}&session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${data.appUrl}?stripe_status=caution_ok&booking_id=${data.bookingId}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${data.appUrl}?stripe_status=cancel&booking_id=${data.bookingId}`,
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
     });
 
-    console.log(`✅ [Stripe] Checkout Session créée : ${session.id} (${data.montantCaution} €)`);
+    console.log(`✅ [Stripe Caution] Session empreinte créée : ${session.id} (${data.montantCaution} €)`);
 
     return {
       success: true,
@@ -511,9 +663,28 @@ async function createStripeCheckoutSession(data: StripeHoldData): Promise<Stripe
       paymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : undefined,
     };
   } catch (err: any) {
-    console.error('❌ [Stripe] Erreur Checkout Session :', err?.message || err);
-    return { success: false, error: err?.message || 'Erreur Stripe' };
+    console.error('❌ [Stripe Caution] Erreur session caution :', err?.message || err);
+    return { success: false, error: err?.message || 'Erreur Stripe caution' };
   }
+}
+
+// ─── 3c. ORCHESTRATION — CRÉE LES DEUX SESSIONS STRIPE ──────
+async function createStripeCheckoutSessions(data: StripeHoldData): Promise<StripeSessionsResult> {
+  console.log('💳 [Stripe] Création des sessions paiement + caution...');
+
+  const [payment, caution] = await Promise.all([
+    createStripePaymentSession(data),
+    createStripeCautionSession(data),
+  ]);
+
+  if (!payment.success) {
+    console.error('❌ [Stripe] Échec session paiement :', payment.error);
+  }
+  if (!caution.success) {
+    console.error('❌ [Stripe] Échec session caution :', caution.error);
+  }
+
+  return { payment, caution };
 }
 
 // ─── 4. HANDLER VERCEL SERVERLESS FUNCTION ──────────────────
@@ -618,10 +789,17 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 2. Initialisation Stripe Hold
+    // 2. Initialisation Stripe (Paiement Location + Empreinte Caution)
     const host = req.headers?.host || 'matik.fr';
     const protocol = host.includes('localhost') ? 'http' : 'https';
     const appUrl = process.env.APP_URL || `${protocol}://${host}`;
+
+    const loueurStripeAccountId = (
+      body.loueurStripeAccountId ||
+      body.stripeAccountId ||
+      body.ownerStripeAccountId ||
+      ''
+    ).trim();
 
     const stripeData: StripeHoldData = {
       bookingId,
@@ -632,10 +810,11 @@ export default async function handler(req: any, res: any) {
       montantCaution: contractData.montantCaution,
       totalLocation: contractData.totalLocation,
       appUrl,
+      loueurStripeAccountId: loueurStripeAccountId || undefined,
     };
 
-    console.log('💳 [Stripe] Initialisation session caution Stripe...');
-    const stripeResult = await createStripeCheckoutSession(stripeData);
+    console.log('💳 [Stripe] Initialisation des sessions Stripe (Paiement réel + Caution)...');
+    const stripeSessions = await createStripeCheckoutSessions(stripeData);
 
     // 3. Envoi des e-mails avec le contrat en pièce jointe
     const emailData: EmailData = {
@@ -654,7 +833,9 @@ export default async function handler(req: any, res: any) {
       fraisService: contractData.fraisService,
       totalLocation: contractData.totalLocation,
       montantCaution: contractData.montantCaution,
-      stripeCheckoutUrl: stripeResult.checkoutUrl,
+      stripeCheckoutUrl: stripeSessions.payment.checkoutUrl || stripeSessions.caution.checkoutUrl,
+      stripePaymentUrl: stripeSessions.payment.checkoutUrl,
+      stripeCautionUrl: stripeSessions.caution.checkoutUrl,
     };
 
     console.log('📬 [Resend] Début de la procédure d\'envoi d\'e-mails...');
@@ -688,10 +869,14 @@ export default async function handler(req: any, res: any) {
         errors: emailResult.errors,
       },
       stripe: {
-        sessionCreated: stripeResult.success,
-        checkoutUrl: stripeResult.checkoutUrl || null,
-        sessionId: stripeResult.sessionId || null,
-        error: stripeResult.error || null,
+        sessionCreated: stripeSessions.payment.success || stripeSessions.caution.success,
+        checkoutUrl: stripeSessions.payment.checkoutUrl || stripeSessions.caution.checkoutUrl || null,
+        paymentCheckoutUrl: stripeSessions.payment.checkoutUrl || null,
+        cautionCheckoutUrl: stripeSessions.caution.checkoutUrl || null,
+        paymentSessionId: stripeSessions.payment.sessionId || null,
+        cautionSessionId: stripeSessions.caution.sessionId || null,
+        sessionId: stripeSessions.payment.sessionId || stripeSessions.caution.sessionId || null,
+        error: stripeSessions.payment.error || stripeSessions.caution.error || null,
       },
       payload: {
         client_nom: `${contractData.clientPrenom} ${contractData.clientNom}`.trim(),
