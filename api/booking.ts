@@ -587,20 +587,6 @@ async function createStripePaymentSession(data: StripeHoldData): Promise<StripeP
   }
 }
 
-    console.log(`✅ [Stripe Payment] Session paiement créée : ${session.id} (${data.totalLocation} €, commission ${(applicationFeeCents / 100).toFixed(2)} €)`);
-
-    return {
-      success: true,
-      sessionId: session.id,
-      checkoutUrl: session.url || undefined,
-      paymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : undefined,
-    };
-  } catch (err: any) {
-    console.error('❌ [Stripe Payment] Erreur session paiement :', err?.message || err);
-    return { success: false, error: err?.message || 'Erreur Stripe paiement' };
-  }
-}
-
 // ─── 3b. STRIPE — EMPREINTE DE CAUTION (NON DÉBITÉE) ─────────
 /**
  * Crée une session Stripe Checkout pour l'empreinte bancaire de caution.
@@ -1011,9 +997,17 @@ export default async function handler(req: any, res: any) {
     });
   } catch (error: any) {
     console.error('❌ [Vercel API] Erreur critique non gérée :', error);
+    const errMsg: string =
+      typeof error?.message === 'string'
+        ? error.message
+        : typeof error === 'string'
+        ? error
+        : error?.code
+        ? `Erreur [${error.code}]`
+        : 'Erreur interne du serveur';
     return res.status(500).json({
       success: false,
-      error: error?.message || 'Erreur interne du serveur',
+      error: errMsg,
     });
   }
 }

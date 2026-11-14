@@ -181,11 +181,26 @@ export async function submitBooking(bookingData: BookingSubmissionData): Promise
     console.groupEnd();
 
     if (!response.ok) {
+      // Normalise l'erreur en string : responseData?.error peut être un objet {code, message}
+      const rawError = responseData?.error;
+      const errorMessage: string =
+        typeof rawError === 'string'
+          ? rawError
+          : rawError?.message
+          ? String(rawError.message)
+          : rawError?.code
+          ? String(rawError.code)
+          : typeof rawError === 'object' && rawError !== null
+          ? JSON.stringify(rawError)
+          : responseData?.message
+          ? String(responseData.message)
+          : `Erreur serveur (HTTP ${response.status})`;
+
       return {
         success: false,
         status: 'error',
         httpStatus: response.status,
-        message: responseData?.error || `Erreur serveur (HTTP ${response.status})`,
+        message: errorMessage,
         payload: fallbackPayload,
       };
     }
@@ -194,7 +209,11 @@ export async function submitBooking(bookingData: BookingSubmissionData): Promise
       success: true,
       status: 'success',
       httpStatus: response.status,
-      message: responseData?.message || 'Réservation traitée avec succès',
+      message: typeof responseData?.message === 'string'
+        ? responseData.message
+        : responseData?.message
+        ? String(responseData.message)
+        : 'Réservation traitée avec succès',
       bookingId: responseData?.bookingId,
       payload: responseData?.payload || fallbackPayload,
       stripeCheckoutUrl: responseData?.stripe?.checkoutUrl || null,

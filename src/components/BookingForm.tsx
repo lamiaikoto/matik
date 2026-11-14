@@ -206,7 +206,16 @@ export const BookingForm: React.FC<BookingFormProps> = ({
 
       if (!result.success && result.status === 'error') {
         console.error('❌ [BookingForm] Échec du traitement de la réservation :', result.message);
-        setSubmitError(result.message || 'Le serveur n\'a pas pu valider votre réservation. Veuillez réessayer.');
+        // Garantie que setSubmitError reçoit toujours une string (jamais un objet)
+        const errMsg: string =
+          typeof result.message === 'string'
+            ? result.message
+            : (result.message as any)?.message
+            ? String((result.message as any).message)
+            : typeof result.message === 'object' && result.message !== null
+            ? JSON.stringify(result.message)
+            : 'Le serveur n\'a pas pu valider votre réservation. Veuillez réessayer.';
+        setSubmitError(errMsg);
         return;
       }
 
@@ -537,7 +546,13 @@ export const BookingForm: React.FC<BookingFormProps> = ({
               {submitError && (
                 <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2.5">
                   <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                  <span>{submitError}</span>
+                  <span>
+                    {typeof submitError === 'string'
+                      ? submitError
+                      : (submitError as any)?.message
+                      ? String((submitError as any).message)
+                      : JSON.stringify(submitError)}
+                  </span>
                 </div>
               )}
 
