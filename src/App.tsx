@@ -127,9 +127,146 @@ export default function App() {
     }
   };
 
+  // Fonction d'extraction des paramètres d'URL (supporte les query params classiques et les routes /# hash)
+  const extractUrlParam = (paramName: string): string | null => {
+    // 1. Recherche dans window.location.search (?key=val)
+    const searchParams = new URLSearchParams(window.location.search);
+    const fromSearch = searchParams.get(paramName);
+    if (fromSearch) return fromSearch;
+
+    // 2. Recherche dans window.location.hash (#/?key=val ou #key=val)
+    const hash = window.location.hash;
+    if (hash.includes('?')) {
+      const hashQuery = hash.substring(hash.indexOf('?') + 1);
+      const hashParams = new URLSearchParams(hashQuery);
+      const fromHash = hashParams.get(paramName);
+      if (fromHash) return fromHash;
+    }
+
+    return null;
+  };
+
   // Charge les données sauvegardées ou réinitialise les données de test préchargées
   useEffect(() => {
     try {
+      // ─── INTERCEPTION IMMÉDIATE DU RETOUR STRIPE ───
+      const stripeStatus = extractUrlParam('stripe_status');
+      const bookingRef = extractUrlParam('booking_id');
+
+      if (stripeStatus) {
+        console.log(`💳 [Stripe Redirect Immédiat] Statut détecté: ${stripeStatus}, bookingId: ${bookingRef || 'inconnu'}`);
+
+        // CAS 1 : Paiement location validé -> Redirection immédiate vers l'empreinte de caution
+        if (stripeStatus === 'payment_ok') {
+          let cautionUrl = bookingRef ? sessionStorage.getItem(`matik_caution_url_${bookingRef}`) : null;
+          if (!cautionUrl) {
+            cautionUrl = sessionStorage.getItem('matik_last_caution_url');
+          }
+          if (!cautionUrl) {
+            try {
+              const savedB = localStorage.getItem('matik_bookings');
+              if (savedB) {
+                const list: BookingRecord[] = JSON.parse(savedB);
+                const found = bookingRef
+                  ? list.find((b) => b.id === bookingRef || b.equipmentId === bookingRef || (b as any).bookingId === bookingRef)
+                  : list[0];
+                if (found?.stripeCautionUrl) {
+                  cautionUrl = found.stripeCautionUrl;
+                }
+              }
+            } catch {}
+          }
+
+          if (cautionUrl) {
+            console.log(`🔗 [Stripe Flow] Redirection automatique vers la caution : ${cautionUrl}`);
+            window.location.href = cautionUrl;
+            return;
+          } else {
+            console.warn('⚠️ [Stripe Flow] URL de caution non trouvée, ouverture directe de la modale.');
+          }
+        }
+
+        // CAS 2 : Caution validée (ou confirmation finale)
+        if (stripeStatus === 'caution_ok') {
+          console.log(`✅ [Stripe Flow] Caution validée pour ${bookingRef}. Envoi de l'e-mail récapitulatif.`);
+          try {
+            const savedB = localStorage.getItem('matik_bookings');
+            if (savedB) {
+              const list: BookingRecord[] = JSON.parse(savedB);
+              const found = bookingRef
+                ? list.find((b) => b.id === bookingRef || (b as any).bookingId === bookingRef)
+                : list[0];
+              if (found) {
+                sendConfirmationEmailAfterValidation({
+                  bookingId: found.id,
+                  clientPrenom: found.clientName.split(' ')[0] || found.clientName,
+                  clientNom: found.clientName.split(' ').slice(1).join(' ') || '',
+                  clientEmail: found.clientEmail,
+                  clientTelephone: found.clientPhone,
+                  loueurNom: found.ownerName,
+                  loueurEmail: found.ownerEmail,
+                  loueurTelephone: found.ownerPhone,
+                  equipmentName: found.equipmentName,
+                  equipmentCategory: found.equipmentCategory,
+                  startDate: found.startDate,
+                  endDate: found.endDate,
+                  dureeJours: found.days,
+                  sousTotal: found.sousTotal || 0,
+                  fraisService: found.fraisService || 0,
+                  totalLocation: found.totalPrice,
+                  montantCaution: found.cautionAmount,
+                }).catch((e) => console.warn('Erreur envoi email récapitulatif :', e));
+
+                // Restituer les détails pour l'affichage de la modale
+                setLastDetails({
+                  equipment: {
+                    id: found.equipmentId,
+                    name: found.equipmentName,
+                    category: found.equipmentCategory,
+                    dailyRate: 0,
+                    depositAmount: found.cautionAmount,
+                    image: found.equipmentImage,
+                    description: '',
+                    specs: [],
+                    partnerArtisan: found.ownerName || 'Loueur Matik',
+                    inStock: true,
+                  },
+                  clientPrenom: found.clientName.split(' ')[0] || found.clientName,
+                  clientNom: found.clientName.split(' ').slice(1).join(' ') || '',
+                  clientEmail: found.clientEmail,
+                  startDate: found.startDate,
+                  endDate: found.endDate,
+                  sousTotal: found.sousTotal,
+                  fraisService: found.fraisService,
+                  totalLocation: found.totalPrice,
+                  montantCaution: found.cautionAmount,
+                  dureeJours: found.days,
+                  networkStatus: 'success',
+                });
+                setLastPayload({
+                  client_nom: found.clientName,
+                  client_email: found.clientEmail,
+                  artisan_nom: found.ownerName || 'Loueur Matik',
+                  nom_matiere: found.equipmentName,
+                  duree_jours: found.days,
+                  total_location: found.totalPrice,
+                  montant_caution: found.cautionAmount,
+                });
+              }
+            }
+          } catch {}
+        }
+
+        // Nettoyer l'URL sans rechargement pour éviter les exécutions répétées
+        try {
+          const cleanUrl = window.location.pathname.includes('booking-success') ? '/' : window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
+        } catch {}
+
+        // Basculer sur la page catalogue/accueil et ouvrir immédiatement la modale de confirmation
+        setCurrentPage('catalogue');
+        setIsConfirmationModalOpen(true);
+      }
       // Effacement des anciennes données de test préchargées pour démarrage production 100% vierge
       const hasResetDemo = localStorage.getItem('matik_clean_virgin_state_prod_v1');
       if (!hasResetDemo) {
@@ -198,76 +335,6 @@ export default function App() {
         if (Array.isArray(parsedBookings) && parsedBookings.length > 0) {
           setBookingList(parsedBookings);
         }
-      }
-
-      // Gestion du retour de paiement / caution Stripe via paramètres d'URL
-      const urlParams = new URLSearchParams(window.location.search);
-      const stripeStatus = urlParams.get('stripe_status');
-      const bookingRef = urlParams.get('booking_id');
-
-      if (stripeStatus && bookingRef) {
-        console.log(`💳 [Stripe Redirect] Statut détecté: ${stripeStatus} pour réservation ${bookingRef}`);
-
-        // CAS 1 : Paiement location validé -> Rediriger automatiquement vers l'empreinte de caution
-        if (stripeStatus === 'payment_ok') {
-          // 1. Chercher l'URL de caution sauvegardée dans la réservation
-          let cautionUrl = sessionStorage.getItem(`matik_caution_url_${bookingRef}`);
-          if (!cautionUrl && savedBookingsStr) {
-            try {
-              const list: BookingRecord[] = JSON.parse(savedBookingsStr);
-              const found = list.find((b) => b.id === bookingRef || b.equipmentId === bookingRef || (b as any).bookingId === bookingRef);
-              if (found?.stripeCautionUrl) {
-                cautionUrl = found.stripeCautionUrl;
-              }
-            } catch {}
-          }
-
-          if (cautionUrl) {
-            console.log(`🔗 [Stripe Flow] Redirection vers l'empreinte de caution : ${cautionUrl}`);
-            window.location.href = cautionUrl;
-            return;
-          }
-        }
-
-        // CAS 2 : Caution validée (ou confirmation finale)
-        if (stripeStatus === 'caution_ok') {
-          console.log(`✅ [Stripe Flow] Caution validée pour ${bookingRef}. Envoi de l'e-mail récapitulatif avec contrat.`);
-          // Déclencher l'envoi de l'e-mail de confirmation récapitulatif
-          if (savedBookingsStr) {
-            try {
-              const list: BookingRecord[] = JSON.parse(savedBookingsStr);
-              const found = list.find((b) => b.id === bookingRef || (b as any).bookingId === bookingRef);
-              if (found) {
-                sendConfirmationEmailAfterValidation({
-                  bookingId: found.id,
-                  clientPrenom: found.clientName.split(' ')[0] || found.clientName,
-                  clientNom: found.clientName.split(' ').slice(1).join(' ') || '',
-                  clientEmail: found.clientEmail,
-                  clientTelephone: found.clientPhone,
-                  loueurNom: found.ownerName,
-                  loueurEmail: found.ownerEmail,
-                  loueurTelephone: found.ownerPhone,
-                  equipmentName: found.equipmentName,
-                  equipmentCategory: found.equipmentCategory,
-                  startDate: found.startDate,
-                  endDate: found.endDate,
-                  dureeJours: found.days,
-                  sousTotal: found.sousTotal || 0,
-                  fraisService: found.fraisService || 0,
-                  totalLocation: found.totalPrice,
-                  montantCaution: found.cautionAmount,
-                }).catch((e) => console.warn('Erreur envoi email récapitulatif :', e));
-              }
-            } catch {}
-          }
-        }
-
-        // Nettoyer l'URL proprement sans recharger
-        const cleanUrl = window.location.pathname;
-        window.history.replaceState({}, document.title, cleanUrl);
-
-        // Afficher la modale de confirmation finale
-        setIsConfirmationModalOpen(true);
       }
 
       return () => {

@@ -226,9 +226,12 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       }
 
       // Sauvegarder l'URL de caution dans sessionStorage pour le retour paiement
-      if (result.stripeCautionUrl && result.bookingId) {
+      if (result.stripeCautionUrl) {
         try {
-          sessionStorage.setItem(`matik_caution_url_${result.bookingId}`, result.stripeCautionUrl);
+          if (result.bookingId) {
+            sessionStorage.setItem(`matik_caution_url_${result.bookingId}`, result.stripeCautionUrl);
+          }
+          sessionStorage.setItem('matik_last_caution_url', result.stripeCautionUrl);
         } catch {}
       }
 

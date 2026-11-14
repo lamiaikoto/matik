@@ -509,9 +509,9 @@ async function createStripePaymentSession(data: StripeHoldData): Promise<StripeP
     // Commission Matik : 10 % du total HT de location (arrondi en centimes)
     const applicationFeeCents = Math.round(totalCents * 0.10);
 
-    // Redirection propre après paiement vers le site pour déclencher l'étape de caution sans coupure d'URL
+    // Redirection propre après paiement vers la route explicite /booking-success
     const baseUrl = (process.env.APP_URL || data.appUrl || 'https://matikilou.com').replace(/\/+$/, '');
-    const successUrl = `${baseUrl}/?stripe_status=payment_ok&booking_id=${data.bookingId}&session_id={CHECKOUT_SESSION_ID}`;
+    const successUrl = `${baseUrl}/booking-success?stripe_status=payment_ok&booking_id=${data.bookingId}&session_id={CHECKOUT_SESSION_ID}`;
 
     // Paramètres de transfer Connect (uniquement si le loueur possède un compte Stripe Connect)
     const hasConnectAccount = !!(data.loueurStripeAccountId && data.loueurStripeAccountId.startsWith('acct_'));
@@ -656,8 +656,8 @@ async function createStripeCautionSession(data: StripeHoldData): Promise<StripeH
         equipment_id: data.equipmentId,
         type: 'matik_caution_hold',
       },
-      success_url: `${data.appUrl}?stripe_status=caution_ok&booking_id=${data.bookingId}&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${data.appUrl}?stripe_status=cancel&booking_id=${data.bookingId}`,
+      success_url: `${(process.env.APP_URL || data.appUrl || 'https://matikilou.com').replace(/\/+$/, '')}/booking-success?stripe_status=caution_ok&booking_id=${data.bookingId}&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${(process.env.APP_URL || data.appUrl || 'https://matikilou.com').replace(/\/+$/, '')}/booking-success?stripe_status=cancel&booking_id=${data.bookingId}`,
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
     });
 
