@@ -569,7 +569,7 @@ async function createStripePaymentSession(data: StripeHoldData): Promise<StripeP
         application_fee_cents: String(applicationFeeCents),
       },
       success_url: successUrl,
-      cancel_url: `${data.appUrl}?stripe_status=cancel&booking_id=${data.bookingId}`,
+      cancel_url: `${(process.env.APP_URL || data.appUrl || 'https://matikilou.com').replace(/\/+$/, '')}/booking-success?stripe_status=cancel&booking_id=${data.bookingId}`,
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
     });
 
@@ -924,9 +924,17 @@ export default async function handler(req: any, res: any) {
     }
 
     // 2. Initialisation Stripe (Paiement Location + Empreinte Caution)
-    const host = req.headers?.host || 'matik.fr';
+    const host = req.headers?.host || 'matikilou.com';
     const protocol = host.includes('localhost') ? 'http' : 'https';
-    const appUrl = process.env.APP_URL || `${protocol}://${host}`;
+    const originHeader = req.headers?.origin || req.headers?.referer;
+    let fallbackAppUrl = `${protocol}://${host}`;
+    if (originHeader) {
+      try {
+        const u = new URL(originHeader);
+        fallbackAppUrl = `${u.protocol}//${u.host}`;
+      } catch {}
+    }
+    const appUrl = process.env.APP_URL || fallbackAppUrl;
 
     const loueurStripeAccountId = (
       body.loueurStripeAccountId ||

@@ -134,11 +134,17 @@ export default function App() {
     const fromSearch = searchParams.get(paramName);
     if (fromSearch) return fromSearch;
 
-    // 2. Recherche dans window.location.hash (#/?key=val ou #key=val)
-    const hash = window.location.hash;
+    // 2. Recherche dans window.location.hash (#/?key=val ou #key=val ou #...&key=val)
+    const hash = window.location.hash || '';
     if (hash.includes('?')) {
       const hashQuery = hash.substring(hash.indexOf('?') + 1);
       const hashParams = new URLSearchParams(hashQuery);
+      const fromHash = hashParams.get(paramName);
+      if (fromHash) return fromHash;
+    } else if (hash.includes('=')) {
+      // Cas où les query params sont placés directement après le hash sans ? (ex: /#stripe_status=...)
+      const cleanedHash = hash.replace(/^#\/?/, '');
+      const hashParams = new URLSearchParams(cleanedHash);
       const fromHash = hashParams.get(paramName);
       if (fromHash) return fromHash;
     }
@@ -149,6 +155,15 @@ export default function App() {
   // Charge les données sauvegardées ou réinitialise les données de test préchargées
   useEffect(() => {
     try {
+      // Nettoyage immédiat du hash résiduel (# ou #/) si présent
+      if (window.location.hash === '#' || window.location.hash === '#/' || window.location.hash === '') {
+        if (window.location.hash) {
+          try {
+            window.history.replaceState(null, document.title, window.location.pathname + window.location.search);
+          } catch {}
+        }
+      }
+
       // ─── INTERCEPTION IMMÉDIATE DU RETOUR STRIPE ───
       const stripeStatus = extractUrlParam('stripe_status');
       const bookingRef = extractUrlParam('booking_id');
@@ -257,14 +272,14 @@ export default function App() {
           } catch {}
         }
 
-        // Nettoyer l'URL sans rechargement pour éviter les exécutions répétées
+        // Nettoyer l'URL et le hash proprement sans rechargement pour éviter les exécutions répétées
         try {
-          const cleanUrl = window.location.pathname.includes('booking-success') ? '/' : window.location.pathname;
-          window.history.replaceState({}, document.title, cleanUrl);
+          const cleanPath = window.location.pathname.includes('booking-success') ? '/' : window.location.pathname;
+          window.history.replaceState({}, document.title, cleanPath);
         } catch {}
 
         // Basculer sur la page catalogue/accueil et ouvrir immédiatement la modale de confirmation
-        setCurrentPage('catalogue');
+        setCurrentPage('accueil');
         setIsConfirmationModalOpen(true);
       }
       // Effacement des anciennes données de test préchargées pour démarrage production 100% vierge
