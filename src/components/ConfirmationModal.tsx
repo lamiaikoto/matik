@@ -32,6 +32,8 @@ interface ConfirmationModalProps {
     dureeJours: number;
     networkStatus: 'success' | 'cors_fallback' | 'simulated';
     stripeCheckoutUrl?: string | null;
+    stripePaymentUrl?: string | null;
+    stripeCautionUrl?: string | null;
   } | null;
 }
 
@@ -59,11 +61,10 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             </div>
             <div className="space-y-1">
               <h3 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
-                Réservation confirmée !
+                Réservation validée !
               </h3>
-              {/* Mandatory requested message */}
-              <p className="text-sm sm:text-base text-amber-700 font-semibold leading-snug">
-                Vérifiez votre boîte mail pour valider votre empreinte de caution et signer votre contrat.
+              <p className="text-sm sm:text-base text-emerald-700 font-semibold leading-snug">
+                Paiement et réservation pris en compte. Votre contrat et le récapitulatif vous ont également été envoyés par e-mail.
               </p>
             </div>
           </div>

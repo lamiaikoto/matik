@@ -494,11 +494,12 @@ async function sendBookingEmails(
  * - mode: 'payment' avec capture_method: 'automatic' (débit immédiat)
  * - application_fee_amount : 10 % des frais de service Matik (en centimes)
  * - transfer_data.destination : compte Stripe Connect du loueur (si disponible)
- *
- * Si le loueur n'a pas encore de compte Connect, le paiement est encaissé sur
- * le compte Matik principal et le virement peut être déclenché manuellement.
+ * - success_url : redirige automatiquement vers la session de caution ou le site
  */
-async function createStripePaymentSession(data: StripeHoldData): Promise<StripePaymentResult> {
+async function createStripePaymentSession(
+  data: StripeHoldData,
+  cautionCheckoutUrl?: string
+): Promise<StripePaymentResult> {
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey || !secretKey.trim()) {
     console.warn('⚠️ [Stripe] STRIPE_SECRET_KEY non configurée — session paiement ignorée.');
@@ -517,8 +518,11 @@ async function createStripePaymentSession(data: StripeHoldData): Promise<StripeP
     // Commission Matik : 10 % du total HT de location (arrondi en centimes)
     const applicationFeeCents = Math.round(totalCents * 0.10);
 
-    // URL de redirection vers la caution après succès du paiement
-    const cautionRedirectUrl = `${data.appUrl}?stripe_status=payment_ok&booking_id=${data.bookingId}&next=caution`;
+    // Si cautionCheckoutUrl est disponible, on redirige directement vers Stripe Caution,
+    // sinon vers la page de retour du site avec les paramètres de caution.
+    const successUrl = cautionCheckoutUrl
+      ? `${cautionCheckoutUrl}${cautionCheckoutUrl.includes('?') ? '&' : '?'}from_payment=1`
+      : `${data.appUrl}?stripe_status=payment_ok&booking_id=${data.bookingId}&next=caution&session_id={CHECKOUT_SESSION_ID}`;
 
     // Paramètres de transfer Connect (uniquement si le loueur possède un compte Stripe Connect)
     const hasConnectAccount = !!(data.loueurStripeAccountId && data.loueurStripeAccountId.startsWith('acct_'));
@@ -575,7 +579,7 @@ async function createStripePaymentSession(data: StripeHoldData): Promise<StripeP
         loueur_stripe_account: data.loueurStripeAccountId || 'none',
         application_fee_cents: String(applicationFeeCents),
       },
-      success_url: `${cautionRedirectUrl}&session_id={CHECKOUT_SESSION_ID}`,
+      success_url: successUrl,
       cancel_url: `${data.appUrl}?stripe_status=cancel&booking_id=${data.bookingId}`,
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
     });
@@ -672,10 +676,12 @@ async function createStripeCautionSession(data: StripeHoldData): Promise<StripeH
 async function createStripeCheckoutSessions(data: StripeHoldData): Promise<StripeSessionsResult> {
   console.log('💳 [Stripe] Création des sessions paiement + caution...');
 
-  const [payment, caution] = await Promise.all([
-    createStripePaymentSession(data),
-    createStripeCautionSession(data),
-  ]);
+  // 1. On crée d'abord la session d'empreinte de caution
+  const caution = await createStripeCautionSession(data);
+
+  // 2. On injecte son checkoutUrl comme success_url de la session de paiement
+  // pour un enchaînement 100% automatique et fluide
+  const payment = await createStripePaymentSession(data, caution.checkoutUrl);
 
   if (!payment.success) {
     console.error('❌ [Stripe] Échec session paiement :', payment.error);

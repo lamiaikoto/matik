@@ -199,6 +199,21 @@ export default function App() {
         }
       }
 
+      // Gestion du retour de paiement / caution Stripe via paramètres d'URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const stripeStatus = urlParams.get('stripe_status');
+      const bookingRef = urlParams.get('booking_id');
+
+      if (stripeStatus && bookingRef) {
+        console.log(`💳 [Stripe Redirect] Statut détecté: ${stripeStatus} pour réservation ${bookingRef}`);
+        // Nettoyer l'URL proprement sans recharger
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+
+        // Afficher la modale de confirmation finale
+        setIsConfirmationModalOpen(true);
+      }
+
       return () => {
         authListener.subscription.unsubscribe();
         unsubscribeRealtime();
@@ -232,6 +247,8 @@ export default function App() {
     dureeJours: number;
     networkStatus: 'success' | 'cors_fallback' | 'simulated';
     stripeCheckoutUrl?: string | null;
+    stripePaymentUrl?: string | null;
+    stripeCautionUrl?: string | null;
   } | null>(null);
 
   // Loueur Equipment Management
@@ -515,6 +532,8 @@ export default function App() {
       dureeJours: number;
       networkStatus: 'success' | 'cors_fallback' | 'simulated';
       stripeCheckoutUrl?: string | null;
+      stripePaymentUrl?: string | null;
+      stripeCautionUrl?: string | null;
     }
   ) => {
     setLastPayload(payload);

@@ -41,6 +41,8 @@ interface BookingFormProps {
     dureeJours: number;
     networkStatus: 'success' | 'cors_fallback' | 'simulated';
     stripeCheckoutUrl?: string | null;
+    stripePaymentUrl?: string | null;
+    stripeCautionUrl?: string | null;
     contractPdfBase64?: string;
     contractFilename?: string;
     emailDeliveryStatus?: {
@@ -238,11 +240,21 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         montantCaution: finalMontantCaution,
         dureeJours: Math.max(1, Number(dureeJours)),
         networkStatus: result.status === 'error' ? 'cors_fallback' : 'success',
-        stripeCheckoutUrl: result.stripeCheckoutUrl,
+        stripeCheckoutUrl: result.stripePaymentUrl || result.stripeCheckoutUrl,
+        stripePaymentUrl: result.stripePaymentUrl || null,
+        stripeCautionUrl: result.stripeCautionUrl || null,
         contractPdfBase64: result.contract?.pdfBase64,
         contractFilename: result.contract?.filename,
         emailDeliveryStatus: result.email,
       });
+
+      // Redirection directe vers Stripe Checkout (paiement de la location)
+      const targetPaymentUrl = result.stripePaymentUrl || result.stripeCheckoutUrl;
+      if (targetPaymentUrl) {
+        console.log('🚀 [BookingForm] Redirection immédiate vers Stripe Checkout :', targetPaymentUrl);
+        window.location.href = targetPaymentUrl;
+        return;
+      }
     } catch (err: unknown) {
       console.error('[BookingForm] Erreur lors de la soumission de la réservation :', err);
       setSubmitError('Une erreur inattendue est survenue. Veuillez vérifier votre connexion et réessayer.');
