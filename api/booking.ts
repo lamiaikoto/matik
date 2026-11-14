@@ -240,36 +240,8 @@ function buildEmailHTML(data: EmailData, role: 'client' | 'loueur'): string {
   const isClient = role === 'client';
   const greeting = isClient ? `Bonjour ${data.clientPrenom},` : `Bonjour ${data.loueurNom},`;
   const intro = isClient
-    ? `Votre réservation pour <strong>${data.equipmentName}</strong> a bien été enregistrée.`
-    : `Une nouvelle réservation a été effectuée pour votre matériel <strong>${data.equipmentName}</strong>.`;
-
-  const paymentCta = isClient && data.stripePaymentUrl
-    ? `<tr><td style="padding:16px 0 8px;">
-         <a href="${data.stripePaymentUrl}" style="display:inline-block;padding:14px 28px;background:#10B981;color:#FFFFFF;font-weight:800;text-decoration:none;border-radius:10px;font-size:14px;letter-spacing:0.5px;">
-           💳 Régler les frais de location (${data.totalLocation.toFixed(2)} €)
-         </a>
-         <p style="margin-top:6px;font-size:11px;color:#64748B;">Paiement sécurisé Stripe direct loueur & commission Matik.</p>
-       </td></tr>`
-    : '';
-
-  const cautionCta = isClient && data.stripeCautionUrl
-    ? `<tr><td style="padding:8px 0 16px;">
-         <a href="${data.stripeCautionUrl}" style="display:inline-block;padding:12px 24px;background:#F59E0B;color:#0F172A;font-weight:700;text-decoration:none;border-radius:10px;font-size:13px;letter-spacing:0.5px;">
-           ✦ Valider l'empreinte de caution (${data.montantCaution.toFixed(2)} €)
-         </a>
-         <p style="margin-top:6px;font-size:11px;color:#64748B;">Empreinte bancaire sécurisée (non débitée).</p>
-       </td></tr>`
-    : '';
-
-  const fallbackCta = isClient && !data.stripePaymentUrl && data.stripeCheckoutUrl
-    ? `<tr><td style="padding:16px 0;">
-         <a href="${data.stripeCheckoutUrl}" style="display:inline-block;padding:14px 28px;background:#F59E0B;color:#0F172A;font-weight:800;text-decoration:none;border-radius:10px;font-size:14px;letter-spacing:0.5px;">
-           ✦ Valider mon paiement / caution Stripe
-         </a>
-       </td></tr>`
-    : '';
-
-  const stripeBlock = `${paymentCta}${cautionCta}${fallbackCta}`;
+    ? `Votre paiement et votre empreinte de caution pour <strong>${data.equipmentName}</strong> ont bien été validés. Votre réservation est officiellement confirmée !`
+    : `Une nouvelle réservation a été confirmée et réglée pour votre matériel <strong>${data.equipmentName}</strong>.`;
 
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -287,7 +259,7 @@ function buildEmailHTML(data: EmailData, role: 'client' | 'loueur'): string {
     <p style="font-size:14px;color:#334155;line-height:1.6;margin:0 0 24px;">${intro}</p>
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;overflow:hidden;margin-bottom:24px;">
       <tr><td style="padding:16px 20px;border-bottom:1px solid #E2E8F0;">
-        <p style="margin:0;font-size:11px;color:#64748B;text-transform:uppercase;font-weight:700;letter-spacing:1px;">Récapitulatif de la réservation</p>
+        <p style="margin:0;font-size:11px;color:#64748B;text-transform:uppercase;font-weight:700;letter-spacing:1px;">Récapitulatif de la réservation validée</p>
       </td></tr>
       <tr><td style="padding:16px 20px;">
         <table width="100%" cellpadding="4" cellspacing="0" style="font-size:13px;color:#334155;">
@@ -302,12 +274,34 @@ function buildEmailHTML(data: EmailData, role: 'client' | 'loueur'): string {
         <table width="100%" cellpadding="4" cellspacing="0" style="font-size:13px;">
           <tr><td style="color:#64748B;">Sous-total :</td><td style="text-align:right;font-weight:600;">${data.sousTotal.toFixed(2)} €</td></tr>
           <tr><td style="color:#64748B;">Frais de service Matik (10%) :</td><td style="text-align:right;font-weight:600;">+ ${data.fraisService.toFixed(2)} €</td></tr>
-          <tr><td style="font-weight:800;color:#0F172A;font-size:14px;">Total TTC :</td><td style="text-align:right;font-weight:900;color:#0F172A;font-size:15px;">${data.totalLocation.toFixed(2)} €</td></tr>
-          <tr><td style="color:#059669;font-weight:600;">Caution Stripe (non débitée) :</td><td style="text-align:right;font-weight:700;color:#059669;">${data.montantCaution.toFixed(2)} €</td></tr>
+          <tr><td style="font-weight:800;color:#0F172A;font-size:14px;">Total réglé TTC :</td><td style="text-align:right;font-weight:900;color:#0F172A;font-size:15px;">${data.totalLocation.toFixed(2)} €</td></tr>
+          <tr><td style="color:#059669;font-weight:600;">Caution Stripe (sécurisée sans débit) :</td><td style="text-align:right;font-weight:700;color:#059669;">${data.montantCaution.toFixed(2)} €</td></tr>
         </table>
       </td></tr>
     </table>
-    ${stripeBlock}
+    <div style="background:#ECFDF5;border:1px solid #A7F3D0;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
+      <p style="margin:0;font-size:13px;color:#065F46;font-weight:600;">
+        ✔ Paiement et empreinte de caution enregistrés avec succès.
+      </p>
+      <p style="margin:4px 0 0;font-size:12px;color:#047857;">
+        Votre contrat de location signé est joint au format PDF à cet e-mail.
+      </p>
+    </div>
+    <p style="font-size:12px;color:#64748B;line-height:1.6;margin:16px 0 0;">
+      ${isClient ? 'Conservez cet e-mail ainsi que votre contrat joint comme justificatif lors de la mise à disposition.' : 'Le contrat de location complet est joint à cet e-mail. Le locataire a reçu le même exemplaire signé.'}
+    </p>
+  </td></tr>
+  <tr><td style="padding:20px 32px;background:#F8FAFC;border-top:1px solid #E2E8F0;">
+    <p style="margin:0;font-size:11px;color:#94A3B8;text-align:center;">
+      © ${new Date().getFullYear()} Matik — Location de matériel sécurisée. Tous droits réservés.
+    </p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
     <p style="font-size:12px;color:#64748B;line-height:1.6;margin:24px 0 0;">
       ${isClient ? 'Vous trouverez votre contrat de location en pièce jointe. Conservez cet e-mail comme justificatif.' : 'Le contrat de location est joint à cet e-mail. Le locataire a reçu le même document.'}
     </p>
@@ -494,12 +488,9 @@ async function sendBookingEmails(
  * - mode: 'payment' avec capture_method: 'automatic' (débit immédiat)
  * - application_fee_amount : 10 % des frais de service Matik (en centimes)
  * - transfer_data.destination : compte Stripe Connect du loueur (si disponible)
- * - success_url : redirige automatiquement vers la session de caution ou le site
+ * - success_url : redirection vers https://matikilou.com/?stripe_status=payment_ok&booking_id=${bookingId}
  */
-async function createStripePaymentSession(
-  data: StripeHoldData,
-  cautionCheckoutUrl?: string
-): Promise<StripePaymentResult> {
+async function createStripePaymentSession(data: StripeHoldData): Promise<StripePaymentResult> {
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey || !secretKey.trim()) {
     console.warn('⚠️ [Stripe] STRIPE_SECRET_KEY non configurée — session paiement ignorée.');
@@ -518,11 +509,9 @@ async function createStripePaymentSession(
     // Commission Matik : 10 % du total HT de location (arrondi en centimes)
     const applicationFeeCents = Math.round(totalCents * 0.10);
 
-    // Si cautionCheckoutUrl est disponible, on redirige directement vers Stripe Caution,
-    // sinon vers la page de retour du site avec les paramètres de caution.
-    const successUrl = cautionCheckoutUrl
-      ? `${cautionCheckoutUrl}${cautionCheckoutUrl.includes('?') ? '&' : '?'}from_payment=1`
-      : `${data.appUrl}?stripe_status=payment_ok&booking_id=${data.bookingId}&next=caution&session_id={CHECKOUT_SESSION_ID}`;
+    // Redirection propre après paiement vers le site pour déclencher l'étape de caution sans coupure d'URL
+    const baseUrl = (process.env.APP_URL || data.appUrl || 'https://matikilou.com').replace(/\/+$/, '');
+    const successUrl = `${baseUrl}/?stripe_status=payment_ok&booking_id=${data.bookingId}&session_id={CHECKOUT_SESSION_ID}`;
 
     // Paramètres de transfer Connect (uniquement si le loueur possède un compte Stripe Connect)
     const hasConnectAccount = !!(data.loueurStripeAccountId && data.loueurStripeAccountId.startsWith('acct_'));
@@ -583,6 +572,20 @@ async function createStripePaymentSession(
       cancel_url: `${data.appUrl}?stripe_status=cancel&booking_id=${data.bookingId}`,
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
     });
+
+    console.log(`✅ [Stripe Payment] Session paiement créée : ${session.id} (${data.totalLocation} €, commission ${(applicationFeeCents / 100).toFixed(2)} €)`);
+
+    return {
+      success: true,
+      sessionId: session.id,
+      checkoutUrl: session.url || undefined,
+      paymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : undefined,
+    };
+  } catch (err: any) {
+    console.error('❌ [Stripe Payment] Erreur session paiement :', err?.message || err);
+    return { success: false, error: err?.message || 'Erreur Stripe paiement' };
+  }
+}
 
     console.log(`✅ [Stripe Payment] Session paiement créée : ${session.id} (${data.totalLocation} €, commission ${(applicationFeeCents / 100).toFixed(2)} €)`);
 
@@ -676,12 +679,10 @@ async function createStripeCautionSession(data: StripeHoldData): Promise<StripeH
 async function createStripeCheckoutSessions(data: StripeHoldData): Promise<StripeSessionsResult> {
   console.log('💳 [Stripe] Création des sessions paiement + caution...');
 
-  // 1. On crée d'abord la session d'empreinte de caution
-  const caution = await createStripeCautionSession(data);
-
-  // 2. On injecte son checkoutUrl comme success_url de la session de paiement
-  // pour un enchaînement 100% automatique et fluide
-  const payment = await createStripePaymentSession(data, caution.checkoutUrl);
+  const [payment, caution] = await Promise.all([
+    createStripePaymentSession(data),
+    createStripeCautionSession(data),
+  ]);
 
   if (!payment.success) {
     console.error('❌ [Stripe] Échec session paiement :', payment.error);
@@ -731,6 +732,63 @@ export default async function handler(req: any, res: any) {
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+
+    // ─── ACTION SPÉCIALE : ENVOI DE CONFIRMATION PAR E-MAIL APRÈS VALIDATION ───
+    if (body.action === 'send_confirmation_email') {
+      console.log(`📬 [Vercel API Booking] Demande d'envoi d'e-mail de confirmation pour ${body.bookingId}`);
+      const emailPayload: EmailData = {
+        bookingId: String(body.bookingId || ''),
+        clientPrenom: String(body.clientPrenom || ''),
+        clientNom: String(body.clientNom || ''),
+        clientEmail: String(body.clientEmail || ''),
+        loueurNom: String(body.loueurNom || body.artisanNom || ''),
+        loueurEmail: String(body.loueurEmail || ''),
+        equipmentName: String(body.equipmentName || body.nomMatiere || ''),
+        equipmentCategory: String(body.equipmentCategory || body.categorie || ''),
+        startDate: String(body.startDate || ''),
+        endDate: String(body.endDate || ''),
+        dureeJours: Number(body.dureeJours || 1),
+        sousTotal: Number(body.sousTotal || 0),
+        fraisService: Number(body.fraisService || 0),
+        totalLocation: Number(body.totalLocation || 0),
+        montantCaution: Number(body.montantCaution || 0),
+      };
+
+      let pdfBuffer: Buffer;
+      if (body.pdfBase64) {
+        pdfBuffer = Buffer.from(body.pdfBase64, 'base64');
+      } else {
+        const contractData: ContractData = {
+          bookingId: emailPayload.bookingId,
+          clientPrenom: emailPayload.clientPrenom,
+          clientNom: emailPayload.clientNom,
+          clientEmail: emailPayload.clientEmail,
+          clientTelephone: String(body.clientTelephone || ''),
+          loueurNom: emailPayload.loueurNom,
+          loueurEmail: emailPayload.loueurEmail,
+          loueurTelephone: String(body.loueurTelephone || ''),
+          equipmentName: emailPayload.equipmentName,
+          equipmentCategory: emailPayload.equipmentCategory,
+          equipmentId: String(body.equipmentId || ''),
+          startDate: emailPayload.startDate,
+          endDate: emailPayload.endDate,
+          dureeJours: emailPayload.dureeJours,
+          prixJournalier: Number(body.prixJournalier || 0),
+          sousTotal: emailPayload.sousTotal,
+          fraisService: emailPayload.fraisService,
+          totalLocation: emailPayload.totalLocation,
+          montantCaution: emailPayload.montantCaution,
+        };
+        pdfBuffer = await generateContractPDF(contractData);
+      }
+
+      const emailResult = await sendBookingEmails(emailPayload, pdfBuffer);
+      return res.status(200).json({
+        success: true,
+        message: 'E-mails de confirmation envoyés avec succès.',
+        email: emailResult,
+      });
+    }
 
     console.log('📦 Corps reçu (clés) :', Object.keys(body).join(', '));
     console.log(`👤 Client : "${body.clientPrenom} ${body.clientNom}" <${body.clientEmail}>`);
@@ -822,45 +880,15 @@ export default async function handler(req: any, res: any) {
     console.log('💳 [Stripe] Initialisation des sessions Stripe (Paiement réel + Caution)...');
     const stripeSessions = await createStripeCheckoutSessions(stripeData);
 
-    // 3. Envoi des e-mails avec le contrat en pièce jointe
-    const emailData: EmailData = {
-      bookingId,
-      clientPrenom: contractData.clientPrenom,
-      clientNom: contractData.clientNom,
-      clientEmail: contractData.clientEmail,
-      loueurNom: contractData.loueurNom,
-      loueurEmail: contractData.loueurEmail,
-      equipmentName: contractData.equipmentName,
-      equipmentCategory: contractData.equipmentCategory,
-      startDate: contractData.startDate,
-      endDate: contractData.endDate,
-      dureeJours: contractData.dureeJours,
-      sousTotal: contractData.sousTotal,
-      fraisService: contractData.fraisService,
-      totalLocation: contractData.totalLocation,
-      montantCaution: contractData.montantCaution,
-      stripeCheckoutUrl: stripeSessions.payment.checkoutUrl || stripeSessions.caution.checkoutUrl,
-      stripePaymentUrl: stripeSessions.payment.checkoutUrl,
-      stripeCautionUrl: stripeSessions.caution.checkoutUrl,
-    };
-
-    console.log('📬 [Resend] Début de la procédure d\'envoi d\'e-mails...');
-    const emailResult = await sendBookingEmails(emailData, pdfBuffer);
-
     const totalDuration = Date.now() - startTime;
-    console.log(`🏁 [Vercel API] Traitement terminé en ${totalDuration}ms`);
-    console.log(`   - Email Client : ${emailResult.clientSent ? '✅ Envoyé' : '❌ Échec'}`);
-    console.log(`   - Email Loueur : ${emailResult.loueurSent ? '✅ Envoyé' : 'ℹ️ Non envoyé ou ignoré'}`);
-    if (emailResult.errors.length > 0) {
-      console.warn(`   - Erreurs Email :`, emailResult.errors);
-    }
+    console.log(`🏁 [Vercel API] Sessions Stripe créées en ${totalDuration}ms (l'envoi d'e-mail interviendra après confirmation paiement & caution).`);
     console.log(`================================================================\n`);
 
     // 4. Réponse
     return res.status(200).json({
       success: true,
       bookingId,
-      message: 'Réservation validée, contrat PDF généré et service e-mail exécuté.',
+      message: 'Réservation validée et sessions de paiement initialisées.',
       contract: {
         generated: true,
         sizeBytes: pdfBuffer.length,
@@ -868,11 +896,9 @@ export default async function handler(req: any, res: any) {
         pdfBase64: pdfBuffer.toString('base64'),
       },
       email: {
-        clientSent: emailResult.clientSent,
-        clientMessageId: emailResult.clientMessageId || null,
-        loueurSent: emailResult.loueurSent,
-        loueurMessageId: emailResult.loueurMessageId || null,
-        errors: emailResult.errors,
+        pendingConfirmation: true,
+        clientSent: false,
+        loueurSent: false,
       },
       stripe: {
         sessionCreated: stripeSessions.payment.success || stripeSessions.caution.success,

@@ -150,6 +150,7 @@ export interface BookingRecord {
   cautionAmount: number;
   status: 'en_attente_remise' | 'en_cours' | 'restitue';
   stripeCautionStatus: 'sequestre_sans_debit' | 'caution_liberee' | 'litige_bloque';
+  stripeCautionUrl?: string;
   createdAt: string;
   checkInReport?: InspectionReport;
   checkOutReport?: InspectionReport;

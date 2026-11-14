@@ -212,3 +212,44 @@ export async function submitBooking(bookingData: BookingSubmissionData): Promise
     };
   }
 }
+
+/**
+ * Déclenche l'envoi de l'e-mail récapitulatif avec contrat PDF une fois le paiement et la caution confirmés.
+ */
+export async function sendConfirmationEmailAfterValidation(params: {
+  bookingId: string;
+  clientPrenom: string;
+  clientNom: string;
+  clientEmail: string;
+  clientTelephone?: string;
+  loueurNom?: string;
+  loueurEmail?: string;
+  loueurTelephone?: string;
+  equipmentName: string;
+  equipmentCategory?: string;
+  startDate: string;
+  endDate: string;
+  dureeJours: number;
+  sousTotal: number;
+  fraisService: number;
+  totalLocation: number;
+  montantCaution: number;
+  pdfBase64?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const apiUrl = `${getApiBaseUrl()}/booking`;
+    const res = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'send_confirmation_email',
+        ...params,
+      }),
+    });
+    const data = await res.json();
+    return { success: !!data.success, error: data.error };
+  } catch (e: any) {
+    console.error('❌ [sendConfirmationEmailAfterValidation Error]', e);
+    return { success: false, error: e?.message };
+  }
+}

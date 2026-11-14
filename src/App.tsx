@@ -34,6 +34,7 @@ import {
   subscribeToEquipments,
   generateUUID,
 } from './lib/equipmentService';
+import { sendConfirmationEmailAfterValidation } from './services/booking';
 import {
   Equipment,
   BookingPayload,
@@ -206,6 +207,61 @@ export default function App() {
 
       if (stripeStatus && bookingRef) {
         console.log(`💳 [Stripe Redirect] Statut détecté: ${stripeStatus} pour réservation ${bookingRef}`);
+
+        // CAS 1 : Paiement location validé -> Rediriger automatiquement vers l'empreinte de caution
+        if (stripeStatus === 'payment_ok') {
+          // 1. Chercher l'URL de caution sauvegardée dans la réservation
+          let cautionUrl = sessionStorage.getItem(`matik_caution_url_${bookingRef}`);
+          if (!cautionUrl && savedBookingsStr) {
+            try {
+              const list: BookingRecord[] = JSON.parse(savedBookingsStr);
+              const found = list.find((b) => b.id === bookingRef || b.equipmentId === bookingRef || (b as any).bookingId === bookingRef);
+              if (found?.stripeCautionUrl) {
+                cautionUrl = found.stripeCautionUrl;
+              }
+            } catch {}
+          }
+
+          if (cautionUrl) {
+            console.log(`🔗 [Stripe Flow] Redirection vers l'empreinte de caution : ${cautionUrl}`);
+            window.location.href = cautionUrl;
+            return;
+          }
+        }
+
+        // CAS 2 : Caution validée (ou confirmation finale)
+        if (stripeStatus === 'caution_ok') {
+          console.log(`✅ [Stripe Flow] Caution validée pour ${bookingRef}. Envoi de l'e-mail récapitulatif avec contrat.`);
+          // Déclencher l'envoi de l'e-mail de confirmation récapitulatif
+          if (savedBookingsStr) {
+            try {
+              const list: BookingRecord[] = JSON.parse(savedBookingsStr);
+              const found = list.find((b) => b.id === bookingRef || (b as any).bookingId === bookingRef);
+              if (found) {
+                sendConfirmationEmailAfterValidation({
+                  bookingId: found.id,
+                  clientPrenom: found.clientName.split(' ')[0] || found.clientName,
+                  clientNom: found.clientName.split(' ').slice(1).join(' ') || '',
+                  clientEmail: found.clientEmail,
+                  clientTelephone: found.clientPhone,
+                  loueurNom: found.ownerName,
+                  loueurEmail: found.ownerEmail,
+                  loueurTelephone: found.ownerPhone,
+                  equipmentName: found.equipmentName,
+                  equipmentCategory: found.equipmentCategory,
+                  startDate: found.startDate,
+                  endDate: found.endDate,
+                  dureeJours: found.days,
+                  sousTotal: found.sousTotal || 0,
+                  fraisService: found.fraisService || 0,
+                  totalLocation: found.totalPrice,
+                  montantCaution: found.cautionAmount,
+                }).catch((e) => console.warn('Erreur envoi email récapitulatif :', e));
+              }
+            } catch {}
+          }
+        }
+
         // Nettoyer l'URL proprement sans recharger
         const cleanUrl = window.location.pathname;
         window.history.replaceState({}, document.title, cleanUrl);
@@ -563,8 +619,19 @@ export default function App() {
       cautionAmount: details.montantCaution,
       status: 'en_attente_remise',
       stripeCautionStatus: 'sequestre_sans_debit',
+      stripeCautionUrl: details.stripeCautionUrl || undefined,
       createdAt: new Date().toISOString(),
     };
+
+    if (details.stripeCautionUrl) {
+      try {
+        sessionStorage.setItem(`matik_caution_url_${newBooking.id}`, details.stripeCautionUrl);
+        const refId = (payload as any).booking_id || (payload as any).bookingId;
+        if (refId) {
+          sessionStorage.setItem(`matik_caution_url_${refId}`, details.stripeCautionUrl);
+        }
+      } catch {}
+    }
 
     setBookingList((prev) => {
       const updated = [newBooking, ...prev];

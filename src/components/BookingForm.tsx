@@ -225,6 +225,13 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         } catch {}
       }
 
+      // Sauvegarder l'URL de caution dans sessionStorage pour le retour paiement
+      if (result.stripeCautionUrl && result.bookingId) {
+        try {
+          sessionStorage.setItem(`matik_caution_url_${result.bookingId}`, result.stripeCautionUrl);
+        } catch {}
+      }
+
       // Déclenche le flux de confirmation utilisateur avec tous les détails
       onBookingSuccess(result.payload, {
         equipment: selectedEquipment,
