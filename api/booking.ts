@@ -498,7 +498,7 @@ async function createStripePaymentSession(data: StripeHoldData): Promise<StripeP
   }
 
   try {
-    const stripe = new Stripe(secretKey.trim());
+    const stripe = new Stripe(secretKey.trim(), { apiVersion: '2024-11-20.acacia' } as any);
     const totalCents = Math.round(data.totalLocation * 100);
 
     if (totalCents <= 0) {
@@ -544,6 +544,9 @@ async function createStripePaymentSession(data: StripeHoldData): Promise<StripeP
       console.log('ℹ️ [Stripe Payment] Pas de compte Connect loueur — paiement encaissé sur compte Matik principal.');
     }
 
+    // expires_at : 45 min dans le futur (> 30 min min Stripe, marge pour clock skew)
+    const expiresAt = Math.floor(Date.now() / 1000) + 45 * 60;
+
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       customer_email: data.clientEmail,
@@ -570,7 +573,7 @@ async function createStripePaymentSession(data: StripeHoldData): Promise<StripeP
       },
       success_url: successUrl,
       cancel_url: `${(process.env.APP_URL || data.appUrl || 'https://matikilou.com').replace(/\/+$/, '')}/booking-success?stripe_status=cancel&booking_id=${data.bookingId}`,
-      expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
+      expires_at: expiresAt,
     });
 
     console.log(`✅ [Stripe Payment] Session paiement créée : ${session.id} (${data.totalLocation} €, commission ${(applicationFeeCents / 100).toFixed(2)} €)`);
@@ -603,12 +606,15 @@ async function createStripeCautionSession(data: StripeHoldData): Promise<StripeH
   }
 
   try {
-    const stripe = new Stripe(secretKey.trim());
+    const stripe = new Stripe(secretKey.trim(), { apiVersion: '2024-11-20.acacia' } as any);
     const cautionCents = Math.round(data.montantCaution * 100);
 
     if (cautionCents <= 0) {
       return { success: true };
     }
+
+    // expires_at : 45 min dans le futur
+    const expiresAt = Math.floor(Date.now() / 1000) + 45 * 60;
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -644,7 +650,7 @@ async function createStripeCautionSession(data: StripeHoldData): Promise<StripeH
       },
       success_url: `${(process.env.APP_URL || data.appUrl || 'https://matikilou.com').replace(/\/+$/, '')}/booking-success?stripe_status=caution_ok&booking_id=${data.bookingId}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${(process.env.APP_URL || data.appUrl || 'https://matikilou.com').replace(/\/+$/, '')}/booking-success?stripe_status=cancel&booking_id=${data.bookingId}`,
-      expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
+      expires_at: expiresAt,
     });
 
     console.log(`✅ [Stripe Caution] Session empreinte créée : ${session.id} (${data.montantCaution} €)`);
@@ -695,14 +701,33 @@ export default async function handler(req: any, res: any) {
   if (req.method === 'GET') {
     const resendKey = process.env.RESEND_API_KEY;
     const stripeKey = process.env.STRIPE_SECRET_KEY;
+    const appUrl = process.env.APP_URL || 'non configuré';
+
+    // Test de connectivité Stripe (sans créer de session)
+    let stripeStatus: string = 'non testée';
+    if (stripeKey && stripeKey.trim()) {
+      try {
+        const stripeTest = new Stripe(stripeKey.trim(), { apiVersion: '2024-11-20.acacia' } as any);
+        await stripeTest.paymentMethods.list({ type: 'card', limit: 1 });
+        stripeStatus = 'connectée_ok';
+      } catch (stripeErr: any) {
+        stripeStatus = `erreur: ${stripeErr?.message || String(stripeErr)}`;
+      }
+    }
+
     return res.status(200).json({
       status: 'ok',
       service: 'Matik Booking Serverless API (Vercel Native)',
       timestamp: new Date().toISOString(),
+      nodeVersion: process.version,
       config: {
         resendConfigured: !!(resendKey && resendKey.trim()),
-        resendKeyPrefix: resendKey ? `${resendKey.trim().substring(0, 5)}...` : null,
+        resendKeyPrefix: resendKey ? `${resendKey.trim().substring(0, 8)}...` : null,
         stripeConfigured: !!(stripeKey && stripeKey.trim()),
+        stripeKeyPrefix: stripeKey ? `${stripeKey.trim().substring(0, 8)}...` : null,
+        stripeKeyType: stripeKey ? (stripeKey.trim().startsWith('sk_live') ? 'LIVE' : stripeKey.trim().startsWith('sk_test') ? 'TEST' : 'INCONNU') : null,
+        stripeApiConnectivity: stripeStatus,
+        appUrl,
         emailFrom: process.env.EMAIL_FROM || 'Matik <onboarding@resend.dev>',
       },
     });
@@ -949,6 +974,13 @@ export default async function handler(req: any, res: any) {
     console.log(`================================================================\n`);
 
     // 4. Réponse
+    // ⚠️ Vercel limite la taille de réponse à 4.5 MB.
+    // On n'inclut le PDF en base64 que si le buffer est raisonnable (< 3 MB encodé).
+    const pdfBase64 = pdfBuffer.length < 2_200_000 ? pdfBuffer.toString('base64') : undefined;
+    if (!pdfBase64) {
+      console.warn(`⚠️ [Vercel API] PDF trop grand (${pdfBuffer.length} octets) — base64 omis de la réponse JSON pour respecter la limite Vercel.`);
+    }
+
     return res.status(200).json({
       success: true,
       bookingId,
@@ -957,7 +989,7 @@ export default async function handler(req: any, res: any) {
         generated: true,
         sizeBytes: pdfBuffer.length,
         filename: `contrat-location-${bookingId}.pdf`,
-        pdfBase64: pdfBuffer.toString('base64'),
+        pdfBase64: pdfBase64 || null,
       },
       email: {
         pendingConfirmation: true,
@@ -996,7 +1028,16 @@ export default async function handler(req: any, res: any) {
       },
     });
   } catch (error: any) {
-    console.error('❌ [Vercel API] Erreur critique non gérée :', error);
+    // Log complet pour le débogage Vercel
+    console.error('❌ [Vercel API] Erreur critique non gérée :', {
+      message: error?.message,
+      name: error?.name,
+      code: error?.code,
+      type: error?.type,
+      statusCode: error?.statusCode,
+      raw: error?.raw,
+      stack: error?.stack?.split('\n').slice(0, 5).join('\n'),
+    });
     const errMsg: string =
       typeof error?.message === 'string'
         ? error.message
@@ -1008,6 +1049,14 @@ export default async function handler(req: any, res: any) {
     return res.status(500).json({
       success: false,
       error: errMsg,
+      // En mode dev, expose plus de détails
+      ...(process.env.NODE_ENV !== 'production' && {
+        debug: {
+          name: error?.name,
+          code: error?.code,
+          type: error?.type,
+        },
+      }),
     });
   }
 }
