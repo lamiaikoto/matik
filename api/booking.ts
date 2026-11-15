@@ -302,21 +302,6 @@ function buildEmailHTML(data: EmailData, role: 'client' | 'loueur'): string {
 </body>
 </html>`;
 }
-    <p style="font-size:12px;color:#64748B;line-height:1.6;margin:24px 0 0;">
-      ${isClient ? 'Vous trouverez votre contrat de location en pièce jointe. Conservez cet e-mail comme justificatif.' : 'Le contrat de location est joint à cet e-mail. Le locataire a reçu le même document.'}
-    </p>
-  </td></tr>
-  <tr><td style="padding:20px 32px;background:#F8FAFC;border-top:1px solid #E2E8F0;">
-    <p style="margin:0;font-size:11px;color:#94A3B8;text-align:center;">
-      © ${new Date().getFullYear()} Matik — Location de matériel sécurisée. Tous droits réservés.
-    </p>
-  </td></tr>
-</table>
-</td></tr>
-</table>
-</body>
-</html>`;
-}
 
 /**
  * Envoie un e-mail unique via l'API Resend avec gestion explicite des erreurs et fallback
