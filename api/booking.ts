@@ -1,6 +1,18 @@
 import PDFDocument from 'pdfkit';
 import { Resend } from 'resend';
 import Stripe from 'stripe';
+import {
+  ApiError,
+  applyCors,
+  assertClientAmountsMatch,
+  computeServerPricing,
+  fetchBookingForUser,
+  fetchEquipmentForBooking,
+  getSupabaseAdmin,
+  requireUser,
+  toErrorPayload,
+  type ServerPricing,
+} from './_lib/bookingSecurity';
 
 // ─── TYPES ──────────────────────────────────────────────────
 export interface ContractData {
@@ -678,7 +690,7 @@ async function createStripeCautionSession(data: StripeHoldData, customerId?: str
           caution_authorized_at: cautionAuthorizedAt,
           type: 'caution_empreinte_bancaire',
         },
-      },
+      } as any,
       line_items: [
         {
           price_data: {
@@ -752,53 +764,31 @@ async function createStripeCheckoutSessions(data: StripeHoldData): Promise<Strip
 
 // ─── 4. HANDLER VERCEL SERVERLESS FUNCTION ──────────────────
 export default async function handler(req: any, res: any) {
-  // CORS Headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  // CORS : seules les origines configurées (APP_URL / ALLOWED_ORIGINS) et la
+  // même origine sont autorisées. Plus de `Access-Control-Allow-Origin: *`.
+  applyCors(req, res, req.headers?.host);
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return res.status(204).end();
   }
 
-  // Healthcheck & Configuration Diagnostic
+  // Healthcheck public : aucune donnée de configuration sensible n'est exposée.
   if (req.method === 'GET') {
-    const resendKey = process.env.RESEND_API_KEY;
-    const stripeKey = process.env.STRIPE_SECRET_KEY;
-    const appUrl = process.env.APP_URL || 'non configuré';
-
-    // Test de connectivité Stripe (sans créer de session)
-    let stripeStatus: string = 'non testée';
-    if (stripeKey && stripeKey.trim()) {
-      try {
-        const stripeTest = new Stripe(stripeKey.trim(), { apiVersion: '2024-11-20.acacia' } as any);
-        await stripeTest.paymentMethods.list({ type: 'card', limit: 1 });
-        stripeStatus = 'connectée_ok';
-      } catch (stripeErr: any) {
-        stripeStatus = `erreur: ${stripeErr?.message || String(stripeErr)}`;
-      }
-    }
-
     return res.status(200).json({
       status: 'ok',
-      service: 'Matik Booking Serverless API (Vercel Native)',
+      service: 'Matik Booking API',
       timestamp: new Date().toISOString(),
-      nodeVersion: process.version,
       config: {
-        resendConfigured: !!(resendKey && resendKey.trim()),
-        resendKeyPrefix: resendKey ? `${resendKey.trim().substring(0, 8)}...` : null,
-        stripeConfigured: !!(stripeKey && stripeKey.trim()),
-        stripeKeyPrefix: stripeKey ? `${stripeKey.trim().substring(0, 8)}...` : null,
-        stripeKeyType: stripeKey ? (stripeKey.trim().startsWith('sk_live') ? 'LIVE' : stripeKey.trim().startsWith('sk_test') ? 'TEST' : 'INCONNU') : null,
-        stripeApiConnectivity: stripeStatus,
-        appUrl,
-        emailFrom: process.env.EMAIL_FROM || 'Matik <onboarding@resend.dev>',
+        stripeConfigured: !!process.env.STRIPE_SECRET_KEY?.trim(),
+        resendConfigured: !!process.env.RESEND_API_KEY?.trim(),
+        databaseConfigured: !!process.env.SUPABASE_SERVICE_ROLE_KEY?.trim(),
+        webhookConfigured: !!process.env.STRIPE_WEBHOOK_SECRET?.trim(),
       },
     });
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Méthode non autorisée. Utilisez POST.' });
+    return res.status(405).json({ success: false, code: 'METHOD_NOT_ALLOWED', error: 'Méthode non autorisée. Utilisez POST.' });
   }
 
   const startTime = Date.now();
@@ -808,11 +798,29 @@ export default async function handler(req: any, res: any) {
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
 
+    // ─── AUTHENTIFICATION OBLIGATOIRE ───
+    // Aucune action (réservation, caution, e-mail) n'est possible sans JWT valide.
+    const user = await requireUser(req);
+
     // ─── ACTION SPÉCIALE : LIBÉRATION D'EMPREINTE DE CAUTION STRIPE ───
     if (body.action === 'release_caution') {
-      const paymentIntentId = String(body.paymentIntentId || body.payment_intent_id || '').trim();
-      const bookingId = String(body.bookingId || body.booking_id || '').trim();
-      console.log(`🔓 [Vercel API Booking] Demande de libération de caution pour la réservation ${bookingId} (PaymentIntent: ${paymentIntentId || 'aucun'})`);
+      const booking = await fetchBookingForUser(body.bookingId || body.booking_id, user.id);
+      const bookingRef = booking.id;
+
+      const requestedIntentId = String(body.paymentIntentId || body.payment_intent_id || '').trim();
+      // Un PaymentIntent fourni doit appartenir à CETTE réservation.
+      const paymentIntentId =
+        requestedIntentId && requestedIntentId.startsWith('pi_') && booking.stripe_caution_intent_id
+          ? requestedIntentId === booking.stripe_caution_intent_id
+            ? requestedIntentId
+            : ''
+          : '';
+
+      if (requestedIntentId && !paymentIntentId && booking.stripe_caution_intent_id) {
+        throw new ApiError(403, 'CAUTION_MISMATCH', "Cette empreinte de caution n'appartient pas à cette réservation.");
+      }
+
+      console.log(`🔓 [Vercel API Booking] Libération de caution demandée par ${user.id} pour ${bookingRef} (PaymentIntent: ${paymentIntentId || 'recherche par référence'})`);
 
       const secretKey = process.env.STRIPE_SECRET_KEY;
       if (!secretKey || !secretKey.trim()) {
@@ -833,18 +841,18 @@ export default async function handler(req: any, res: any) {
           const pi = await stripe.paymentIntents.cancel(paymentIntentId);
           canceledPaymentIntentId = pi.id;
           console.log(`✅ [Stripe] PaymentIntent ${pi.id} annulé avec succès.`);
-        } else if (body.sessionId && String(body.sessionId).startsWith('cs_')) {
-          // 2. Si on a le sessionId Checkout, récupérer le PaymentIntent associé
+        } else if (body.sessionId && String(body.sessionId) === booking.stripe_caution_session_id) {
+          // 2. Si on a le sessionId Checkout (rattaché à cette réservation)
           const session = await stripe.checkout.sessions.retrieve(String(body.sessionId));
           if (session.payment_intent && typeof session.payment_intent === 'string') {
             const pi = await stripe.paymentIntents.cancel(session.payment_intent);
             canceledPaymentIntentId = pi.id;
             console.log(`✅ [Stripe] PaymentIntent ${pi.id} récupéré via session et annulé avec succès.`);
           }
-        } else if (bookingId) {
+        } else if (bookingRef) {
           // 3. Recherche du PaymentIntent par métadonnées booking_id
           const search = await stripe.paymentIntents.search({
-            query: `metadata['booking_id']:'${bookingId}' AND metadata['type']:'caution_empreinte_bancaire'`,
+            query: `metadata['booking_id']:'${bookingRef}' AND metadata['type']:'caution_empreinte_bancaire'`,
           });
           if (search.data.length > 0) {
             const piToCancel = search.data[0];
@@ -854,6 +862,17 @@ export default async function handler(req: any, res: any) {
               console.log(`✅ [Stripe] PaymentIntent ${pi.id} trouvé via recherche et annulé.`);
             }
           }
+        }
+
+        // Persistance serveur : la caution est marquée libérée même si le client
+        // ferme son navigateur juste après l'appel.
+        try {
+          await getSupabaseAdmin()
+            .from('bookings')
+            .update({ stripe_caution_status: 'caution_liberee' })
+            .eq('id', bookingRef);
+        } catch (dbErr: any) {
+          console.warn('⚠️ [Supabase] Statut de caution non persisté :', dbErr?.message || dbErr);
         }
 
         return res.status(200).json({
@@ -879,55 +898,74 @@ export default async function handler(req: any, res: any) {
     }
 
     // ─── ACTION SPÉCIALE : ENVOI DE CONFIRMATION PAR E-MAIL APRÈS VALIDATION ───
+    // Toutes les données (destinataires, montants, contrat) viennent de la base :
+    // le corps de la requête ne sert plus qu'à identifier la réservation.
     if (body.action === 'send_confirmation_email') {
-      console.log(`📬 [Vercel API Booking] Demande d'envoi d'e-mail de confirmation pour ${body.bookingId}`);
-      const emailPayload: EmailData = {
-        bookingId: String(body.bookingId || ''),
-        clientPrenom: String(body.clientPrenom || ''),
-        clientNom: String(body.clientNom || ''),
-        clientEmail: String(body.clientEmail || ''),
-        loueurNom: String(body.loueurNom || body.artisanNom || ''),
-        loueurEmail: String(body.loueurEmail || ''),
-        equipmentName: String(body.equipmentName || body.nomMatiere || ''),
-        equipmentCategory: String(body.equipmentCategory || body.categorie || ''),
-        startDate: String(body.startDate || ''),
-        endDate: String(body.endDate || ''),
-        dureeJours: Number(body.dureeJours || 1),
-        sousTotal: Number(body.sousTotal || 0),
-        fraisService: Number(body.fraisService || 0),
-        totalLocation: Number(body.totalLocation || 0),
-        montantCaution: Number(body.montantCaution || 0),
-      };
+      const booking = await fetchBookingForUser(body.bookingId || body.booking_id, user.id);
 
-      let pdfBuffer: Buffer;
-      if (body.pdfBase64) {
-        pdfBuffer = Buffer.from(body.pdfBase64, 'base64');
-      } else {
-        const contractData: ContractData = {
-          bookingId: emailPayload.bookingId,
-          clientPrenom: emailPayload.clientPrenom,
-          clientNom: emailPayload.clientNom,
-          clientEmail: emailPayload.clientEmail,
-          clientTelephone: String(body.clientTelephone || ''),
-          loueurNom: emailPayload.loueurNom,
-          loueurEmail: emailPayload.loueurEmail,
-          loueurTelephone: String(body.loueurTelephone || ''),
-          equipmentName: emailPayload.equipmentName,
-          equipmentCategory: emailPayload.equipmentCategory,
-          equipmentId: String(body.equipmentId || ''),
-          startDate: emailPayload.startDate,
-          endDate: emailPayload.endDate,
-          dureeJours: emailPayload.dureeJours,
-          prixJournalier: Number(body.prixJournalier || 0),
-          sousTotal: emailPayload.sousTotal,
-          fraisService: emailPayload.fraisService,
-          totalLocation: emailPayload.totalLocation,
-          montantCaution: emailPayload.montantCaution,
-        };
-        pdfBuffer = await generateContractPDF(contractData);
+      if (booking.confirmation_email_sent_at) {
+        return res.status(200).json({
+          success: true,
+          alreadySent: true,
+          message: 'Le récapitulatif a déjà été envoyé pour cette réservation.',
+        });
       }
 
+      console.log(`📬 [Vercel API Booking] Envoi du récapitulatif pour ${booking.id} (demandé par ${user.id})`);
+
+      const clientName = (booking.client_name || '').trim();
+      const emailPayload: EmailData = {
+        bookingId: booking.id,
+        clientPrenom: clientName.split(' ')[0] || 'Locataire',
+        clientNom: clientName.split(' ').slice(1).join(' '),
+        clientEmail: booking.client_email,
+        loueurNom: booking.owner_name || '',
+        loueurEmail: booking.owner_email || '',
+        equipmentName: booking.equipment_name,
+        equipmentCategory: booking.equipment_category,
+        startDate: booking.start_date,
+        endDate: booking.end_date,
+        dureeJours: Number(booking.days) || 1,
+        sousTotal: Number(booking.subtotal) || 0,
+        fraisService: Number(booking.service_fee) || 0,
+        totalLocation: Number(booking.total_price) || 0,
+        montantCaution: Number(booking.caution_amount) || 0,
+      };
+
+      const contractData: ContractData = {
+        bookingId: emailPayload.bookingId,
+        clientPrenom: emailPayload.clientPrenom,
+        clientNom: emailPayload.clientNom,
+        clientEmail: emailPayload.clientEmail,
+        clientTelephone: booking.client_phone || '',
+        loueurNom: emailPayload.loueurNom,
+        loueurEmail: emailPayload.loueurEmail,
+        loueurTelephone: booking.owner_phone || '',
+        equipmentName: emailPayload.equipmentName,
+        equipmentCategory: emailPayload.equipmentCategory,
+        equipmentId: booking.equipment_id || '',
+        startDate: emailPayload.startDate,
+        endDate: emailPayload.endDate,
+        dureeJours: emailPayload.dureeJours,
+        prixJournalier: emailPayload.dureeJours > 0 ? Math.round((emailPayload.sousTotal / emailPayload.dureeJours) * 100) / 100 : 0,
+        sousTotal: emailPayload.sousTotal,
+        fraisService: emailPayload.fraisService,
+        totalLocation: emailPayload.totalLocation,
+        montantCaution: emailPayload.montantCaution,
+      };
+
+      const pdfBuffer = await generateContractPDF(contractData);
       const emailResult = await sendBookingEmails(emailPayload, pdfBuffer);
+
+      try {
+        await getSupabaseAdmin()
+          .from('bookings')
+          .update({ confirmation_email_sent_at: new Date().toISOString() })
+          .eq('id', booking.id);
+      } catch (dbErr: any) {
+        console.warn('⚠️ [Supabase] Horodatage e-mail non persisté :', dbErr?.message || dbErr);
+      }
+
       return res.status(200).json({
         success: true,
         message: 'E-mails de confirmation envoyés avec succès.',
@@ -942,7 +980,7 @@ export default async function handler(req: any, res: any) {
 
       const secretKey = process.env.STRIPE_SECRET_KEY;
       if (!secretKey || !secretKey.trim() || !sessionId) {
-        return res.status(200).json({ success: false, error: 'Clé Stripe ou sessionId absent' });
+        throw new ApiError(400, 'SESSION_REQUIRED', 'Clé Stripe ou sessionId absent.');
       }
 
       try {
@@ -950,6 +988,14 @@ export default async function handler(req: any, res: any) {
         const session = await stripe.checkout.sessions.retrieve(sessionId, {
           expand: ['payment_intent', 'payment_intent.payment_method'],
         });
+
+        // La session doit appartenir à une réservation de l'appelant.
+        const bookingRef = String(session.metadata?.booking_id || '').trim();
+        const booking = await fetchBookingForUser(bookingRef, user.id);
+
+        if (booking.stripe_caution_session_id && booking.stripe_caution_session_id !== session.id) {
+          throw new ApiError(403, 'SESSION_MISMATCH', "Cette session Stripe n'est pas rattachée à votre réservation.");
+        }
 
         const pi = typeof session.payment_intent === 'object' ? (session.payment_intent as any) : null;
         const piId = pi ? pi.id : (typeof session.payment_intent === 'string' ? session.payment_intent : null);
@@ -967,61 +1013,107 @@ export default async function handler(req: any, res: any) {
           cautionAuthorizedAt: authorizedAt,
         });
       } catch (err: any) {
+        if (err instanceof ApiError) throw err;
         console.warn('⚠️ [Vercel API Booking] Erreur récupération session caution :', err?.message || err);
         return res.status(200).json({ success: false, error: err?.message });
       }
     }
 
     console.log('📦 Corps reçu (clés) :', Object.keys(body).join(', '));
-    console.log(`👤 Client : "${body.clientPrenom} ${body.clientNom}" <${body.clientEmail}>`);
-    console.log(`🏢 Loueur : "${body.loueurNom || body.artisanNom}" <${body.loueurEmail}>`);
-    console.log(`🛠️ Équipement : "${body.equipmentName || body.nomMatiere}" (${body.equipmentCategory || body.categorie})`);
-    console.log(`💰 Montants : Total=${body.totalLocation} €, Caution=${body.montantCaution} €`);
+    console.log(`👤 Locataire authentifié : ${user.id}`);
 
-    // Validation des champs requis
-    const required = [
-      'clientPrenom',
-      'clientNom',
-      'clientEmail',
-      'startDate',
-      'endDate',
-      'dureeJours',
-      'totalLocation',
-      'montantCaution',
-    ];
-    const missing = required.filter((f) => body[f] === undefined || body[f] === null || body[f] === '');
-    if (missing.length > 0) {
-      console.warn('⚠️ [Vercel API] Champs obligatoires manquants :', missing);
-      return res.status(400).json({
-        success: false,
-        error: `Champs obligatoires manquants : ${missing.join(', ')}`,
-      });
+    // ─── 1. VALIDATION MINIMALE DES DONNÉES NON TARIFAIRES ───
+    const startDate = typeof body.startDate === 'string' ? body.startDate.slice(0, 10) : '';
+    const endDate = typeof body.endDate === 'string' ? body.endDate.slice(0, 10) : '';
+    if (!startDate || !endDate) {
+      throw new ApiError(400, 'INVALID_DATES', 'Les dates de location sont obligatoires.');
     }
+
+    const clientPrenom = String(body.clientPrenom || '').trim();
+    const clientNom = String(body.clientNom || '').trim();
+    if (!clientPrenom || !clientNom) {
+      throw new ApiError(400, 'MISSING_NAME', 'Le prénom et le nom du locataire sont obligatoires.');
+    }
+    if (!user.email) {
+      throw new ApiError(400, 'EMAIL_REQUIRED', "Votre compte doit disposer d'une adresse e-mail valide.");
+    }
+
+    // ─── 2. TARIFICATION AUTORITAIRE (base de données) ───
+    // Les montants envoyés par le navigateur ne sont jamais utilisés pour le débit.
+    const equipment = await fetchEquipmentForBooking(body.equipmentId);
+    const pricing: ServerPricing = computeServerPricing(equipment, startDate, endDate);
+    assertClientAmountsMatch(body as Record<string, unknown>, pricing);
+
+    console.log(
+      `💰 [Tarification serveur] ${equipment.title} : ${pricing.dailyRate} €/j × ${pricing.days} j = ${pricing.subtotal} € ` +
+        `+ ${pricing.serviceFee} € (frais) = ${pricing.total} € — caution ${pricing.caution} €`
+    );
 
     const bookingId = `MAT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
     console.log(`🏷️ Référence générée : ${bookingId}`);
 
-    // 1. Génération du contrat PDF
+    // ─── 3. PERSISTANCE DE LA RÉSERVATION AVANT TOUTE CRÉATION STRIPE ───
+    // Aucun paiement ne doit exister sans ligne en base.
+    const admin = getSupabaseAdmin();
+    const clientFullName = `${clientPrenom} ${clientNom}`.trim();
+
+    const { error: insertError } = await admin.from('bookings').insert({
+      id: bookingId,
+      booking_reference: bookingId,
+      equipment_id: equipment.id,
+      equipment_name: equipment.title || '',
+      equipment_category: equipment.category || '',
+      equipment_image: equipment.image_url || '',
+      locataire_id: user.id,
+      loueur_id: equipment.owner_id,
+      client_name: clientFullName,
+      client_email: user.email,
+      client_phone: String(body.clientTelephone || '').trim(),
+      owner_name: String(body.loueurNom || body.artisanNom || '').trim() || null,
+      owner_email: String(body.loueurEmail || '').trim() || null,
+      owner_phone: String(body.loueurTelephone || '').trim() || null,
+      start_date: pricing.startDate,
+      end_date: pricing.endDate,
+      days: pricing.days,
+      subtotal: pricing.subtotal,
+      service_fee: pricing.serviceFee,
+      total_price: pricing.total,
+      caution_amount: pricing.caution,
+      status: 'pending_payment',
+      stripe_caution_status: 'sequestre_sans_debit',
+    });
+
+    if (insertError && insertError.code !== '23505') {
+      console.error('❌ [Supabase] Réservation non persistée :', insertError.message);
+      throw new ApiError(
+        500,
+        'BOOKING_PERSIST_FAILED',
+        "La réservation n'a pas pu être enregistrée. Aucun paiement n'a été effectué."
+      );
+    }
+    const insertedFresh = !insertError;
+
+    // 4. Génération du contrat PDF (données base + montants serveur)
     const contractData: ContractData = {
       bookingId,
-      clientPrenom: String(body.clientPrenom).trim(),
-      clientNom: String(body.clientNom).trim(),
-      clientEmail: String(body.clientEmail).trim(),
+      clientPrenom,
+      clientNom,
+      clientEmail: user.email,
       clientTelephone: String(body.clientTelephone || '').trim(),
       loueurNom: String(body.loueurNom || body.artisanNom || '').trim(),
       loueurEmail: String(body.loueurEmail || '').trim(),
       loueurTelephone: String(body.loueurTelephone || '').trim(),
-      equipmentName: String(body.equipmentName || body.nomMatiere || '').trim(),
-      equipmentCategory: String(body.equipmentCategory || body.categorie || '').trim(),
-      equipmentId: String(body.equipmentId || '').trim(),
-      startDate: String(body.startDate),
-      endDate: String(body.endDate),
-      dureeJours: Number(body.dureeJours),
-      prixJournalier: Number(body.prixJournalier) || 0,
-      sousTotal: Number(body.sousTotal) || 0,
-      fraisService: Number(body.fraisService) || 0,
-      totalLocation: Number(body.totalLocation),
-      montantCaution: Number(body.montantCaution),
+      equipmentName: equipment.title || '',
+      equipmentCategory: equipment.category || '',
+      equipmentId: equipment.id,
+      startDate: pricing.startDate,
+      endDate: pricing.endDate,
+      dureeJours: pricing.days,
+      prixJournalier: pricing.dailyRate,
+      sousTotal: pricing.subtotal,
+      fraisService: pricing.serviceFee,
+      totalLocation: pricing.total,
+      montantCaution: pricing.caution,
     };
 
     let pdfBuffer: Buffer;
@@ -1029,13 +1121,13 @@ export default async function handler(req: any, res: any) {
       pdfBuffer = await generateContractPDF(contractData);
     } catch (pdfErr: any) {
       console.error('❌ [Vercel API] Erreur critique génération PDF :', pdfErr);
-      return res.status(500).json({
-        success: false,
-        error: `Erreur génération PDF : ${pdfErr?.message || pdfErr}`,
-      });
+      if (insertedFresh) {
+        await admin.from('bookings').delete().eq('id', bookingId).eq('status', 'pending_payment');
+      }
+      throw new ApiError(500, 'CONTRACT_GENERATION_FAILED', `Erreur génération du contrat : ${pdfErr?.message || pdfErr}`);
     }
 
-    // 2. Initialisation Stripe (Paiement Location + Empreinte Caution)
+    // 5. Initialisation Stripe (paiement location + empreinte caution)
     const host = req.headers?.host || 'matikilou.com';
     const protocol = host.includes('localhost') ? 'http' : 'https';
     const originHeader = req.headers?.origin || req.headers?.referer;
@@ -1048,30 +1140,42 @@ export default async function handler(req: any, res: any) {
     }
     const appUrl = process.env.APP_URL || fallbackAppUrl;
 
-    const loueurStripeAccountId = (
-      body.loueurStripeAccountId ||
-      body.stripeAccountId ||
-      body.ownerStripeAccountId ||
-      ''
-    ).trim();
+    const loueurStripeAccountId = String(body.loueurStripeAccountId || '').trim();
 
     const stripeData: StripeHoldData = {
       bookingId,
       clientEmail: contractData.clientEmail,
-      clientNom: `${contractData.clientPrenom} ${contractData.clientNom}`.trim(),
+      clientNom: clientFullName,
       equipmentName: contractData.equipmentName,
-      equipmentId: contractData.equipmentId,
-      montantCaution: contractData.montantCaution,
-      totalLocation: contractData.totalLocation,
+      equipmentId: equipment.id,
+      montantCaution: pricing.caution,
+      totalLocation: pricing.total,
       appUrl,
-      startDate: contractData.startDate,
-      endDate: contractData.endDate,
-      dureeJours: contractData.dureeJours,
-      loueurStripeAccountId: loueurStripeAccountId || undefined,
+      startDate: pricing.startDate,
+      endDate: pricing.endDate,
+      dureeJours: pricing.days,
+      loueurStripeAccountId: loueurStripeAccountId.startsWith('acct_') ? loueurStripeAccountId : undefined,
     };
 
     console.log('💳 [Stripe] Initialisation des sessions Stripe (Paiement réel + Caution)...');
     const stripeSessions = await createStripeCheckoutSessions(stripeData);
+
+    // 6. Enregistrement des identifiants Stripe côté base (le webhook fera foi)
+    const stripePatch: Record<string, unknown> = {};
+    if (stripeSessions.payment.paymentIntentId) stripePatch.stripe_payment_intent_id = stripeSessions.payment.paymentIntentId;
+    if (stripeSessions.caution.sessionId) stripePatch.stripe_caution_session_id = stripeSessions.caution.sessionId;
+    if (stripeSessions.caution.paymentIntentId) stripePatch.stripe_caution_intent_id = stripeSessions.caution.paymentIntentId;
+    if (stripeSessions.caution.checkoutUrl) stripePatch.stripe_caution_url = stripeSessions.caution.checkoutUrl;
+    const stripeCustomerId = stripeSessions.caution.customerId || stripeSessions.payment.customerId;
+    if (stripeCustomerId) stripePatch.stripe_customer_id = stripeCustomerId;
+    if (stripeSessions.caution.cautionAuthorizedAt) stripePatch.caution_authorized_at = stripeSessions.caution.cautionAuthorizedAt;
+
+    if (Object.keys(stripePatch).length > 0) {
+      const { error: stripePatchError } = await admin.from('bookings').update(stripePatch).eq('id', bookingId);
+      if (stripePatchError) {
+        console.error('❌ [Supabase] Identifiants Stripe non enregistrés :', stripePatchError.message);
+      }
+    }
 
     const totalDuration = Date.now() - startTime;
     console.log(`🏁 [Vercel API] Sessions Stripe créées en ${totalDuration}ms (l'envoi d'e-mail interviendra après confirmation paiement & caution).`);
@@ -1090,6 +1194,16 @@ export default async function handler(req: any, res: any) {
       bookingId,
       status: 'pending_payment',
       message: 'Réservation validée en attente de règlement et sessions de paiement initialisées.',
+      pricing: {
+        days: pricing.days,
+        dailyRate: pricing.dailyRate,
+        subtotal: pricing.subtotal,
+        serviceFee: pricing.serviceFee,
+        total: pricing.total,
+        caution: pricing.caution,
+        startDate: pricing.startDate,
+        endDate: pricing.endDate,
+      },
       contract: {
         generated: true,
         sizeBytes: pdfBuffer.length,
@@ -1135,35 +1249,34 @@ export default async function handler(req: any, res: any) {
       },
     });
   } catch (error: any) {
-    // Log complet pour le débogage Vercel
-    console.error('❌ [Vercel API] Erreur critique non gérée :', {
-      message: error?.message,
-      name: error?.name,
-      code: error?.code,
-      type: error?.type,
-      statusCode: error?.statusCode,
-      raw: error?.raw,
-      stack: error?.stack?.split('\n').slice(0, 5).join('\n'),
-    });
-    const errMsg: string =
-      typeof error?.message === 'string'
-        ? error.message
-        : typeof error === 'string'
-        ? error
-        : error?.code
-        ? `Erreur [${error.code}]`
-        : 'Erreur interne du serveur';
-    return res.status(500).json({
-      success: false,
-      error: errMsg,
+    const { status, body: errorBody } = toErrorPayload(error);
+
+    if (status >= 500) {
+      console.error('❌ [Vercel API] Erreur critique non gérée :', {
+        message: error?.message,
+        name: error?.name,
+        code: error?.code,
+        type: error?.type,
+        statusCode: error?.statusCode,
+        raw: error?.raw,
+        stack: error?.stack?.split('\n').slice(0, 5).join('\n'),
+      });
+    } else {
+      console.warn(`⚠️ [Vercel API] Requête refusée (${status}) :`, (errorBody as { error?: string }).error);
+    }
+
+    return res.status(status).json({
+      ...errorBody,
       // En mode dev, expose plus de détails
-      ...(process.env.NODE_ENV !== 'production' && {
-        debug: {
-          name: error?.name,
-          code: error?.code,
-          type: error?.type,
-        },
-      }),
+      ...(process.env.NODE_ENV !== 'production' && status >= 500
+        ? {
+            debug: {
+              name: error?.name,
+              code: error?.code,
+              type: error?.type,
+            },
+          }
+        : {}),
     });
   }
 }

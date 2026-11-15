@@ -1,4 +1,5 @@
 import { BookingPayload } from '../types';
+import { supabase } from '../lib/supabase';
 
 /**
  * Interface des données de réservation transmises à l'API Matik interne.
@@ -82,6 +83,22 @@ function getApiBaseUrl(): string {
   // En dev, Vite proxifie /api vers le serveur Express
   // En production, l'API est servie depuis le même domaine
   return '/api';
+}
+
+/**
+ * Jeton d'accès Supabase à joindre à chaque appel d'API.
+ * L'API refuse toute requête sans JWT valide (401) : c'est elle qui décide
+ * des montants et vérifie que l'utilisateur possède bien la réservation.
+ */
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch (err) {
+    console.warn('⚠️ [Matik API] Session Supabase indisponible :', err);
+    return {};
+  }
 }
 
 /**
@@ -170,6 +187,7 @@ export async function submitBooking(bookingData: BookingSubmissionData): Promise
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
+        ...(await getAuthHeaders()),
       },
       body: JSON.stringify(requestBody),
       signal: controller.signal,
@@ -269,10 +287,11 @@ export async function sendConfirmationEmailAfterValidation(params: {
     const apiUrl = `${getApiBaseUrl()}/booking`;
     const res = await fetch(apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
       body: JSON.stringify({
         action: 'send_confirmation_email',
-        ...params,
+        // Le serveur reconstruit destinataires, montants et contrat depuis la base.
+        bookingId: params.bookingId,
       }),
     });
     const data = await res.json();
@@ -296,7 +315,7 @@ export async function releaseStripeCautionApi(params: {
     const apiUrl = `${getApiBaseUrl()}/booking`;
     const res = await fetch(apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
       body: JSON.stringify({
         action: 'release_caution',
         ...params,
@@ -330,7 +349,7 @@ export async function syncCautionSessionDetailsApi(sessionId: string): Promise<{
     const apiUrl = `${getApiBaseUrl()}/booking`;
     const res = await fetch(apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
       body: JSON.stringify({
         action: 'get_caution_session_details',
         sessionId,
