@@ -36,6 +36,15 @@ import {
 } from './lib/equipmentService';
 import { sendConfirmationEmailAfterValidation, releaseStripeCautionApi, syncCautionSessionDetailsApi } from './services/booking';
 import {
+  fetchBookingsForUser,
+  fetchBookingById,
+  insertBookingRecord,
+  updateBookingRecord,
+  deleteBookingRecord,
+  subscribeToBookings,
+  type BookingUpdate,
+} from './lib/bookingService';
+import {
   Equipment,
   BookingPayload,
   PageType,
@@ -45,9 +54,6 @@ import {
   BookingRecord,
   InspectionReport,
 } from './types';
-
-// Site vierge : aucun historique de réservation de démonstration
-const INITIAL_BOOKINGS: BookingRecord[] = [];
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<PageType>('accueil');
@@ -152,6 +158,194 @@ export default function App() {
     return null;
   };
 
+  const [lastPayload, setLastPayload] = useState<BookingPayload | null>(null);
+  const [lastDetails, setLastDetails] = useState<{
+    equipment: Equipment;
+    clientPrenom: string;
+    clientNom: string;
+    clientEmail: string;
+    startDate: string;
+    endDate: string;
+    sousTotal?: number;
+    fraisService?: number;
+    totalLocation: number;
+    montantCaution: number;
+    dureeJours: number;
+    networkStatus: 'success' | 'cors_fallback' | 'simulated';
+    stripeCheckoutUrl?: string | null;
+    stripePaymentUrl?: string | null;
+    stripeCautionUrl?: string | null;
+  } | null>(null);
+
+  // Nettoyage de l'URL de retour Stripe (sans rechargement de page)
+  const clearStripeReturnUrl = () => {
+    try {
+      const cleanPath = window.location.pathname.includes('booking-success') ? '/' : window.location.pathname;
+      window.history.replaceState({}, document.title, cleanPath);
+    } catch {}
+  };
+
+  /**
+   * Traite le retour de Stripe. Les réservations vivent désormais dans Supabase :
+   *   payment_ok → le paiement location est encaissé, on redirige vers l'empreinte de caution ;
+   *   caution_ok → la réservation passe en « en_attente_remise » et l'e-mail récapitulatif part ;
+   *   cancel     → la réservation n'est supprimée que si aucun paiement n'a été encaissé.
+   */
+  const applyStripeReturn = async (stripeStatus: string, bookingRef: string | null) => {
+    // ── CAS 1 : paiement de la location validé → empreinte de caution ──
+    if (stripeStatus === 'payment_ok') {
+      if (bookingRef) {
+        // Trace le paiement : une annulation de la caution ne doit jamais effacer une location payée.
+        await updateBookingRecord(bookingRef, { paymentConfirmedAt: new Date().toISOString() });
+      }
+
+      let cautionUrl = bookingRef ? sessionStorage.getItem(`matik_caution_url_${bookingRef}`) : null;
+      if (!cautionUrl) cautionUrl = sessionStorage.getItem('matik_last_caution_url');
+      if (!cautionUrl && bookingRef) {
+        const row = await fetchBookingById(bookingRef);
+        if (row?.stripeCautionUrl) cautionUrl = row.stripeCautionUrl;
+      }
+
+      if (cautionUrl) {
+        console.log('🔗 [Stripe Flow] Redirection automatique vers la caution.');
+        window.location.href = cautionUrl;
+        return;
+      }
+
+      console.warn('⚠️ [Stripe Flow] URL de caution introuvable, ouverture de la confirmation.');
+      setCurrentPage('accueil');
+      setIsConfirmationModalOpen(true);
+      return;
+    }
+
+    // ── CAS 2 : caution validée → réservation confirmée ──
+    if (stripeStatus === 'caution_ok') {
+      const sessionId = extractUrlParam('session_id');
+      let found = bookingRef ? await fetchBookingById(bookingRef) : null;
+
+      if (!found && !bookingRef) {
+        const mine = await fetchBookingsForUser();
+        found = mine.find((b) => b.status === 'pending_payment') || mine[0] || null;
+      }
+
+      const patch: BookingUpdate = {};
+      if (sessionId) {
+        try {
+          const details = await syncCautionSessionDetailsApi(sessionId);
+          if (details.success) {
+            patch.stripeCautionPaymentIntentId = details.paymentIntentId;
+            patch.stripeCustomerId = details.customerId;
+            patch.stripePaymentMethodId = details.paymentMethodId;
+            patch.cautionAuthorizedAt = details.cautionAuthorizedAt || new Date().toISOString();
+          }
+        } catch (err) {
+          console.warn('⚠️ [Stripe Details] Récupération des détails impossible :', err);
+        }
+      }
+
+      if (found && found.status === 'pending_payment') {
+        patch.status = 'en_attente_remise';
+      }
+
+      if (found && Object.keys(patch).length > 0) {
+        const updated = await updateBookingRecord(found.id, patch);
+        found = updated.booking || ({ ...found, ...patch } as BookingRecord);
+      }
+
+      if (found) {
+        const confirmed: BookingRecord = found;
+
+        setBookingList((prev) => [confirmed, ...prev.filter((b) => b.id !== confirmed.id)]);
+
+        // E-mail récapitulatif : envoyé une seule fois par réservation
+        if (!confirmed.confirmationEmailSentAt) {
+          sendConfirmationEmailAfterValidation({
+            bookingId: confirmed.id,
+            clientPrenom: confirmed.clientName.split(' ')[0] || confirmed.clientName,
+            clientNom: confirmed.clientName.split(' ').slice(1).join(' ') || '',
+            clientEmail: confirmed.clientEmail,
+            clientTelephone: confirmed.clientPhone,
+            loueurNom: confirmed.ownerName,
+            loueurEmail: confirmed.ownerEmail,
+            loueurTelephone: confirmed.ownerPhone,
+            equipmentName: confirmed.equipmentName,
+            equipmentCategory: confirmed.equipmentCategory,
+            startDate: confirmed.startDate,
+            endDate: confirmed.endDate,
+            dureeJours: confirmed.days,
+            sousTotal: confirmed.sousTotal || 0,
+            fraisService: confirmed.fraisService || 0,
+            totalLocation: confirmed.totalPrice,
+            montantCaution: confirmed.cautionAmount,
+          })
+            .then(() => updateBookingRecord(confirmed.id, { confirmationEmailSentAt: new Date().toISOString() }))
+            .catch((e) => console.warn('Erreur envoi email récapitulatif :', e));
+        }
+
+        // Restitution des détails pour la modale de confirmation
+        setLastDetails({
+          equipment: {
+            id: confirmed.equipmentId,
+            name: confirmed.equipmentName,
+            category: confirmed.equipmentCategory,
+            dailyRate: 0,
+            depositAmount: confirmed.cautionAmount,
+            image: confirmed.equipmentImage,
+            description: '',
+            specs: [],
+            partnerArtisan: confirmed.ownerName || 'Loueur Matik',
+            inStock: true,
+          },
+          clientPrenom: confirmed.clientName.split(' ')[0] || confirmed.clientName,
+          clientNom: confirmed.clientName.split(' ').slice(1).join(' ') || '',
+          clientEmail: confirmed.clientEmail,
+          startDate: confirmed.startDate,
+          endDate: confirmed.endDate,
+          sousTotal: confirmed.sousTotal,
+          fraisService: confirmed.fraisService,
+          totalLocation: confirmed.totalPrice,
+          montantCaution: confirmed.cautionAmount,
+          dureeJours: confirmed.days,
+          networkStatus: 'success',
+        });
+        setLastPayload({
+          client_nom: confirmed.clientName,
+          client_email: confirmed.clientEmail,
+          artisan_nom: confirmed.ownerName || 'Loueur Matik',
+          nom_matiere: confirmed.equipmentName,
+          duree_jours: confirmed.days,
+          total_location: confirmed.totalPrice,
+          montant_caution: confirmed.cautionAmount,
+        });
+      }
+
+      setCurrentPage('accueil');
+      setIsConfirmationModalOpen(true);
+      return;
+    }
+
+    // ── CAS 3 : annulation / retour arrière ──
+    if (stripeStatus === 'cancel') {
+      if (bookingRef) {
+        const row = await fetchBookingById(bookingRef);
+        if (!row?.paymentConfirmedAt) {
+          await deleteBookingRecord(bookingRef);
+          setBookingList((prev) => prev.filter((b) => b.id !== bookingRef));
+        } else {
+          console.warn('⚠️ [Stripe Flow] Caution annulée mais location déjà payée : réservation conservée.');
+        }
+      }
+      try {
+        if (bookingRef) sessionStorage.removeItem(`matik_caution_url_${bookingRef}`);
+        sessionStorage.removeItem('matik_last_caution_url');
+      } catch {}
+      setCurrentPage('accueil');
+      return;
+    }
+
+    setCurrentPage('accueil');
+  };
+
   // Charge les données sauvegardées ou réinitialise les données de test préchargées
   useEffect(() => {
     try {
@@ -164,228 +358,8 @@ export default function App() {
         }
       }
 
-      // ─── INTERCEPTION IMMÉDIATE DU RETOUR STRIPE ───
-      const stripeStatus = extractUrlParam('stripe_status');
-      const bookingRef = extractUrlParam('booking_id');
+      // ─── LE RETOUR STRIPE EST TRAITÉ APRÈS L'INITIALISATION DE LA SESSION (voir plus bas) ───
 
-      if (stripeStatus) {
-        console.log(`💳 [Stripe Redirect Immédiat] Statut détecté: ${stripeStatus}, bookingId: ${bookingRef || 'inconnu'}`);
-
-        // CAS 1 : Paiement location validé → Redirection immédiate vers l'empreinte de caution
-        if (stripeStatus === 'payment_ok') {
-          // Stocker le bookingRef API dans le booking pending_payment pour le retrouver au retour caution_ok
-          if (bookingRef) {
-            try {
-              const savedB = localStorage.getItem('matik_bookings');
-              if (savedB) {
-                const list: BookingRecord[] = JSON.parse(savedB);
-                // Associe le bookingId API (MAT-xxx) au booking local (bk-xxx) le plus récent en pending_payment
-                const pendingIdx = list.findIndex((b) => b.status === 'pending_payment');
-                if (pendingIdx >= 0 && !(list[pendingIdx] as any).bookingId) {
-                  (list[pendingIdx] as any).bookingId = bookingRef;
-                  localStorage.setItem('matik_bookings', JSON.stringify(list));
-                }
-              }
-            } catch {}
-          }
-
-          let cautionUrl = bookingRef ? sessionStorage.getItem(`matik_caution_url_${bookingRef}`) : null;
-          if (!cautionUrl) {
-            cautionUrl = sessionStorage.getItem('matik_last_caution_url');
-          }
-          if (!cautionUrl) {
-            try {
-              const savedB = localStorage.getItem('matik_bookings');
-              if (savedB) {
-                const list: BookingRecord[] = JSON.parse(savedB);
-                const found = bookingRef
-                  ? list.find((b) => b.id === bookingRef || b.equipmentId === bookingRef || (b as any).bookingId === bookingRef)
-                  : list.find((b) => b.status === 'pending_payment') || list[0];
-                if (found?.stripeCautionUrl) {
-                  cautionUrl = found.stripeCautionUrl;
-                }
-              }
-            } catch {}
-          }
-
-          if (cautionUrl) {
-            console.log(`🔗 [Stripe Flow] Redirection automatique vers la caution : ${cautionUrl}`);
-            window.location.href = cautionUrl;
-            return;
-          } else {
-            console.warn('⚠️ [Stripe Flow] URL de caution non trouvée, ouverture directe de la modale.');
-          }
-        }
-
-        // CAS 2 : Caution validée (ou confirmation finale)
-        if (stripeStatus === 'caution_ok') {
-          console.log(`✅ [Stripe Flow] Caution validée pour ${bookingRef}. Confirmation de la réservation.`);
-          const sessionId = extractUrlParam('session_id');
-
-          // Synchronisation des détails Customer, PaymentMethod et PaymentIntent depuis Stripe
-          if (sessionId) {
-            syncCautionSessionDetailsApi(sessionId).then((details) => {
-              if (details.success) {
-                console.log('💳 [Stripe Details] Customer & PaymentMethod enregistrés pour renouvellement :', details);
-                setBookingList((prev) => {
-                  const updated = prev.map((b) => {
-                    const isMatch = bookingRef
-                      ? (b.id === bookingRef || (b as any).bookingId === bookingRef)
-                      : b.status === 'en_attente_remise' || b.status === 'pending_payment';
-                    if (isMatch) {
-                      return {
-                        ...b,
-                        stripeCautionPaymentIntentId: details.paymentIntentId || b.stripeCautionPaymentIntentId,
-                        stripeCustomerId: details.customerId || b.stripeCustomerId,
-                        stripePaymentMethodId: details.paymentMethodId || b.stripePaymentMethodId,
-                        cautionAuthorizedAt: details.cautionAuthorizedAt || b.cautionAuthorizedAt || new Date().toISOString(),
-                      };
-                    }
-                    return b;
-                  });
-                  try { localStorage.setItem('matik_bookings', JSON.stringify(updated)); } catch {}
-                  return updated;
-                });
-              }
-            }).catch((err) => console.warn('⚠️ [Stripe Details] Erreur récupération détails:', err));
-          }
-
-          try {
-            // Passe la réservation de 'pending_payment' → 'en_attente_remise' (paiement + caution confirmés)
-            setBookingList((prev) => {
-              const updated = prev.map((b) => {
-                const isMatch = bookingRef
-                  ? (b.id === bookingRef || (b as any).bookingId === bookingRef)
-                  : b.status === 'pending_payment';
-                if (isMatch && b.status === 'pending_payment') {
-                  console.log(`✅ [Booking Confirm] Réservation ${b.id} confirmée (pending_payment → en_attente_remise)`);
-                  return { ...b, status: 'en_attente_remise' as const };
-                }
-                return b;
-              });
-              try { localStorage.setItem('matik_bookings', JSON.stringify(updated)); } catch {}
-              return updated;
-            });
-
-            const savedB = localStorage.getItem('matik_bookings');
-            if (savedB) {
-              const list: BookingRecord[] = JSON.parse(savedB);
-              const found = bookingRef
-                ? list.find((b) => b.id === bookingRef || (b as any).bookingId === bookingRef)
-                : list.find((b) => b.status === 'en_attente_remise');
-              if (found) {
-                sendConfirmationEmailAfterValidation({
-                  bookingId: found.id,
-                  clientPrenom: found.clientName.split(' ')[0] || found.clientName,
-                  clientNom: found.clientName.split(' ').slice(1).join(' ') || '',
-                  clientEmail: found.clientEmail,
-                  clientTelephone: found.clientPhone,
-                  loueurNom: found.ownerName,
-                  loueurEmail: found.ownerEmail,
-                  loueurTelephone: found.ownerPhone,
-                  equipmentName: found.equipmentName,
-                  equipmentCategory: found.equipmentCategory,
-                  startDate: found.startDate,
-                  endDate: found.endDate,
-                  dureeJours: found.days,
-                  sousTotal: found.sousTotal || 0,
-                  fraisService: found.fraisService || 0,
-                  totalLocation: found.totalPrice,
-                  montantCaution: found.cautionAmount,
-                }).catch((e) => console.warn('Erreur envoi email récapitulatif :', e));
-
-                // Restituer les détails pour l'affichage de la modale
-                setLastDetails({
-                  equipment: {
-                    id: found.equipmentId,
-                    name: found.equipmentName,
-                    category: found.equipmentCategory,
-                    dailyRate: 0,
-                    depositAmount: found.cautionAmount,
-                    image: found.equipmentImage,
-                    description: '',
-                    specs: [],
-                    partnerArtisan: found.ownerName || 'Loueur Matik',
-                    inStock: true,
-                  },
-                  clientPrenom: found.clientName.split(' ')[0] || found.clientName,
-                  clientNom: found.clientName.split(' ').slice(1).join(' ') || '',
-                  clientEmail: found.clientEmail,
-                  startDate: found.startDate,
-                  endDate: found.endDate,
-                  sousTotal: found.sousTotal,
-                  fraisService: found.fraisService,
-                  totalLocation: found.totalPrice,
-                  montantCaution: found.cautionAmount,
-                  dureeJours: found.days,
-                  networkStatus: 'success',
-                });
-                setLastPayload({
-                  client_nom: found.clientName,
-                  client_email: found.clientEmail,
-                  artisan_nom: found.ownerName || 'Loueur Matik',
-                  nom_matiere: found.equipmentName,
-                  duree_jours: found.days,
-                  total_location: found.totalPrice,
-                  montant_caution: found.cautionAmount,
-                });
-              }
-            }
-          } catch {}
-
-          // Nettoyer l'URL
-          try {
-            const cleanPath = window.location.pathname.includes('booking-success') ? '/' : window.location.pathname;
-            window.history.replaceState({}, document.title, cleanPath);
-          } catch {}
-
-          // Basculer sur l'accueil et ouvrir la modale de confirmation
-          setCurrentPage('accueil');
-          setIsConfirmationModalOpen(true);
-          return;
-        }
-
-        // CAS 3 : Annulation / retour arrière sans payer
-        if (stripeStatus === 'cancel') {
-          console.log(`🚫 [Stripe Flow] Paiement annulé pour ${bookingRef}. Suppression du booking pending_payment.`);
-          setBookingList((prev) => {
-            // Supprime les réservations en attente de paiement pour cet équipement
-            const updated = prev.filter((b) => {
-              if (b.status !== 'pending_payment') return true;
-              if (bookingRef) {
-                return !(b.id === bookingRef || (b as any).bookingId === bookingRef);
-              }
-              return false; // Sans référence, supprimer les pending_payment
-            });
-            try { localStorage.setItem('matik_bookings', JSON.stringify(updated)); } catch {}
-            return updated;
-          });
-          // Nettoyage sessionStorage
-          try {
-            if (bookingRef) sessionStorage.removeItem(`matik_caution_url_${bookingRef}`);
-            sessionStorage.removeItem('matik_last_caution_url');
-          } catch {}
-
-          // Nettoyer l'URL
-          try {
-            const cleanPath = window.location.pathname.includes('booking-success') ? '/' : window.location.pathname;
-            window.history.replaceState({}, document.title, cleanPath);
-          } catch {}
-
-          // Redirection simple à l'accueil SANS ouvrir la modale de succès
-          setCurrentPage('accueil');
-          return;
-        }
-
-        // Nettoyer l'URL et le hash proprement sans rechargement pour éviter les exécutions répétées
-        try {
-          const cleanPath = window.location.pathname.includes('booking-success') ? '/' : window.location.pathname;
-          window.history.replaceState({}, document.title, cleanPath);
-        } catch {}
-
-        setCurrentPage('accueil');
-      }
-      // Effacement des anciennes données de test préchargées pour démarrage production 100% vierge
       const hasResetDemo = localStorage.getItem('matik_clean_virgin_state_prod_v1');
       if (!hasResetDemo) {
         localStorage.removeItem('matik_equipment_list');
@@ -447,12 +421,14 @@ export default function App() {
         loadEquipmentsData(currentUser);
       });
 
-      const savedBookingsStr = localStorage.getItem('matik_bookings');
-      if (savedBookingsStr) {
-        const parsedBookings = JSON.parse(savedBookingsStr);
-        if (Array.isArray(parsedBookings) && parsedBookings.length > 0) {
-          setBookingList(parsedBookings);
-        }
+      // Traitement du retour Stripe (paiement location puis empreinte de caution)
+      const stripeStatus = extractUrlParam('stripe_status');
+      const bookingRef = extractUrlParam('booking_id');
+      if (stripeStatus) {
+        console.log(`💳 [Stripe Redirect] Statut détecté : ${stripeStatus}, bookingId : ${bookingRef || 'inconnu'}`);
+        void applyStripeReturn(stripeStatus, bookingRef)
+          .catch((err) => console.warn('⚠️ [Stripe Flow] Traitement du retour impossible :', err))
+          .finally(() => clearStripeReturnUrl());
       }
 
       return () => {
@@ -461,6 +437,32 @@ export default function App() {
       };
     } catch {}
   }, []);
+
+  // Chargement initial + synchronisation temps réel des réservations de l'utilisateur.
+  // La RLS ne renvoie que les réservations où il est locataire ou loueur : une réservation
+  // passée sur mobile apparaît donc immédiatement dans le dashboard du propriétaire.
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBookings = async () => {
+      if (!currentUser?.id) {
+        if (!cancelled) setBookingList([]);
+        return;
+      }
+      const bookings = await fetchBookingsForUser();
+      if (!cancelled) setBookingList(bookings);
+    };
+
+    void loadBookings();
+    const unsubscribe = subscribeToBookings(() => {
+      void loadBookings();
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [currentUser?.id]);
   const [inspectionModalData, setInspectionModalData] = useState<{
     isOpen: boolean;
     equipment: Equipment | null;
@@ -474,25 +476,6 @@ export default function App() {
     type: 'check_in',
     isTenantSignaling: false,
   });
-
-  const [lastPayload, setLastPayload] = useState<BookingPayload | null>(null);
-  const [lastDetails, setLastDetails] = useState<{
-    equipment: Equipment;
-    clientPrenom: string;
-    clientNom: string;
-    clientEmail: string;
-    startDate: string;
-    endDate: string;
-    sousTotal?: number;
-    fraisService?: number;
-    totalLocation: number;
-    montantCaution: number;
-    dureeJours: number;
-    networkStatus: 'success' | 'cors_fallback' | 'simulated';
-    stripeCheckoutUrl?: string | null;
-    stripePaymentUrl?: string | null;
-    stripeCautionUrl?: string | null;
-  } | null>(null);
 
   // Loueur Equipment Management
   const handleAddNewEquipment = () => {
@@ -650,108 +633,121 @@ export default function App() {
     });
   };
 
-  const handleSaveInspectionReport = (report: InspectionReport, releaseCaution?: boolean) => {
-    if (report.bookingId) {
-      const isTenantSignal = report.submittedBy === 'client' || inspectionModalData.isTenantSignaling;
+  const handleSaveInspectionReport = async (report: InspectionReport, releaseCaution?: boolean) => {
+    if (!report.bookingId) return;
 
-      // Si c'est un check-out validé par le loueur et qu'aucun litige n'est signalé (releaseCaution = true),
-      // déclencher l'annulation du PaymentIntent Stripe de caution
-      if (releaseCaution && !isTenantSignal) {
-        const targetBooking = bookingList.find((b) => b.id === report.bookingId);
-        releaseStripeCautionApi({
-          bookingId: report.bookingId,
+    const isTenantSignal = report.submittedBy === 'client' || inspectionModalData.isTenantSignaling;
+    const bookingId = report.bookingId;
+
+    // Calcule le nouveau statut et les champs à persister dans Supabase
+    const patch: BookingUpdate = {
+      checkInReport: report.type === 'check_in' ? report : undefined,
+      checkOutReport: report.type === 'check_out' ? report : undefined,
+      restitutionSignaledAt: isTenantSignal ? report.timestamp : undefined,
+    };
+
+    if (report.type === 'check_in') {
+      patch.status = 'en_cours';
+    } else if (report.type === 'check_out') {
+      if (isTenantSignal) {
+        patch.status = 'restitution_signalee';
+      } else if (releaseCaution) {
+        patch.status = 'restitue';
+        patch.stripeCautionStatus = 'caution_liberee';
+      }
+    }
+
+    // Mise à jour optimiste de l'interface
+    setBookingList((prev) =>
+      prev.map((b) =>
+        b.id === bookingId
+          ? {
+              ...b,
+              status: patch.status || b.status,
+              restitutionSignaledAt: patch.restitutionSignaledAt || b.restitutionSignaledAt,
+              stripeCautionStatus: patch.stripeCautionStatus || b.stripeCautionStatus,
+              checkInReport: patch.checkInReport || b.checkInReport,
+              checkOutReport: patch.checkOutReport || b.checkOutReport,
+            }
+          : b
+      )
+    );
+
+    // Persistance de l'état des lieux dans Supabase
+    const result = await updateBookingRecord(bookingId, patch);
+    if (!result.success) {
+      console.warn('[Inspection] Enregistrement Supabase impossible :', result.error);
+    }
+
+    // Libération réelle de l'empreinte Stripe (check-out validé par le loueur)
+    if (releaseCaution && !isTenantSignal) {
+      const targetBooking = bookingList.find((b) => b.id === bookingId);
+      try {
+        const res = await releaseStripeCautionApi({
+          bookingId,
           paymentIntentId: targetBooking?.stripeCautionPaymentIntentId,
           sessionId: targetBooking?.stripeCautionSessionId,
-        }).then((res) => {
-          if (res.success) {
-            console.log(`✅ [Stripe Caution Automatique] Caution libérée pour ${report.bookingId}`);
-          } else {
-            console.warn(`⚠️ [Stripe Caution Automatique] Problème libération Stripe :`, res.error);
-          }
-        }).catch((err) => {
-          console.error(`❌ [Stripe Caution Automatique] Erreur :`, err);
         });
+        if (res.success) {
+          console.log(`✅ [Stripe Caution Automatique] Caution libérée pour ${bookingId}`);
+        } else {
+          console.warn('⚠️ [Stripe Caution Automatique] Problème libération Stripe :', res.error);
+        }
+      } catch (err) {
+        console.error('❌ [Stripe Caution Automatique] Erreur :', err);
       }
-
-      setBookingList((prev) => {
-        const updated = prev.map((b) => {
-          if (b.id === report.bookingId) {
-            let nextStatus = b.status;
-            if (report.type === 'check_in') {
-              nextStatus = 'en_cours';
-            } else if (report.type === 'check_out') {
-              if (isTenantSignal) {
-                nextStatus = 'restitution_signalee';
-              } else if (releaseCaution) {
-                nextStatus = 'restitue';
-              }
-            }
-
-            return {
-              ...b,
-              status: nextStatus,
-              restitutionSignaledAt: isTenantSignal ? report.timestamp : b.restitutionSignaledAt,
-              stripeCautionStatus: (!isTenantSignal && releaseCaution)
-                ? ('caution_liberee' as const)
-                : b.stripeCautionStatus,
-              checkInReport: report.type === 'check_in' ? report : b.checkInReport,
-              checkOutReport: report.type === 'check_out' ? report : b.checkOutReport,
-            };
-          }
-          return b;
-        });
-        try {
-          localStorage.setItem('matik_bookings', JSON.stringify(updated));
-        } catch {}
-        return updated;
-      });
     }
   };
 
-  const handleReleaseCaution = (bookingId: string) => {
+  const handleReleaseCaution = async (bookingId: string) => {
     const targetBooking = bookingList.find((b) => b.id === bookingId);
-    releaseStripeCautionApi({
-      bookingId,
-      paymentIntentId: targetBooking?.stripeCautionPaymentIntentId,
-      sessionId: targetBooking?.stripeCautionSessionId,
-    }).catch((e) => console.warn('Erreur libération Stripe :', e));
 
-    setBookingList((prev) => {
-      const updated = prev.map((b) => {
-        if (b.id === bookingId) {
-          return {
-            ...b,
-            status: 'restitue' as const,
-            stripeCautionStatus: 'caution_liberee' as const,
-          };
-        }
-        return b;
-      });
-      try {
-        localStorage.setItem('matik_bookings', JSON.stringify(updated));
-      } catch {}
-      return updated;
+    setBookingList((prev) =>
+      prev.map((b) =>
+        b.id === bookingId
+          ? { ...b, status: 'restitue' as const, stripeCautionStatus: 'caution_liberee' as const }
+          : b
+      )
+    );
+
+    const result = await updateBookingRecord(bookingId, {
+      status: 'restitue',
+      stripeCautionStatus: 'caution_liberee',
     });
+    if (!result.success) {
+      console.warn('[Caution] Libération non persistée :', result.error);
+    }
+
+    try {
+      await releaseStripeCautionApi({
+        bookingId,
+        paymentIntentId: targetBooking?.stripeCautionPaymentIntentId,
+        sessionId: targetBooking?.stripeCautionSessionId,
+      });
+    } catch (e) {
+      console.warn('Erreur libération Stripe :', e);
+    }
   };
 
-  const handleDisputeCaution = (bookingId: string, reason: string) => {
-    setBookingList((prev) => {
-      const updated = prev.map((b) => {
-        if (b.id === bookingId) {
-          return {
-            ...b,
-            stripeCautionStatus: 'litige_bloque' as const,
-            disputeReason: reason,
-            disputedAt: new Date().toISOString(),
-          };
-        }
-        return b;
-      });
-      try {
-        localStorage.setItem('matik_bookings', JSON.stringify(updated));
-      } catch {}
-      return updated;
+  const handleDisputeCaution = async (bookingId: string, reason: string) => {
+    const disputedAt = new Date().toISOString();
+
+    setBookingList((prev) =>
+      prev.map((b) =>
+        b.id === bookingId
+          ? { ...b, stripeCautionStatus: 'litige_bloque' as const, disputeReason: reason, disputedAt }
+          : b
+      )
+    );
+
+    const result = await updateBookingRecord(bookingId, {
+      stripeCautionStatus: 'litige_bloque',
+      disputeReason: reason,
+      disputedAt,
     });
+    if (!result.success) {
+      console.warn('[Caution] Litige non persisté :', result.error);
+    }
   };
 
   /**
@@ -820,7 +816,7 @@ export default function App() {
 
 
 
-  const handleBookingSuccess = (
+  const handleBookingSuccess = async (
     payload: BookingPayload,
     details: {
       bookingId?: string;
@@ -849,10 +845,6 @@ export default function App() {
   ) => {
     setLastPayload(payload);
     setLastDetails(details);
-    // N'ouvre la modale immédiatement que si aucune redirection Stripe n'est en cours
-    if (!details.stripeCheckoutUrl && !details.stripePaymentUrl) {
-      setIsConfirmationModalOpen(true);
-    }
 
     const finalBookingId = details.bookingId || (payload as any).booking_id || (payload as any).bookingId || `bk-${Date.now()}`;
 
@@ -901,13 +893,31 @@ export default function App() {
       } catch {}
     }
 
-    setBookingList((prev) => {
-      const updated = [newBooking, ...prev];
-      try {
-        localStorage.setItem('matik_bookings', JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
+    // Mise à jour optimiste, puis persistance réelle dans Supabase.
+    // En cas d'échec, on annule l'affichage et on bloque la redirection Stripe :
+    // jamais de paiement sans réservation enregistrée côté loueur.
+    setBookingList((prev) => [newBooking, ...prev.filter((b) => b.id !== newBooking.id)]);
+
+    const result = await insertBookingRecord(newBooking);
+    if (!result.success) {
+      setBookingList((prev) => prev.filter((b) => b.id !== newBooking.id));
+      console.error('[Booking] Enregistrement Supabase impossible :', result.error);
+      throw new Error(
+        result.error === 'AUTH_REQUIRED'
+          ? 'Connectez-vous pour finaliser votre réservation.'
+          : `Impossible d'enregistrer la réservation (${result.error || 'erreur base de données'}). Aucun paiement n'a été effectué.`
+      );
+    }
+
+    if (result.booking) {
+      setBookingList((prev) => [result.booking as BookingRecord, ...prev.filter((b) => b.id !== (result.booking as BookingRecord).id)]);
+    }
+
+    // La réservation est bien en base : on peut afficher la confirmation
+    // (si aucune redirection Stripe n'est en cours).
+    if (!details.stripeCheckoutUrl && !details.stripePaymentUrl) {
+      setIsConfirmationModalOpen(true);
+    }
   };
 
   const handleLogout = async () => {

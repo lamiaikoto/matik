@@ -318,7 +318,7 @@ export const EquipmentDetails: React.FC<EquipmentDetailsProps> = ({
                 <div className="space-y-1">
                   <div className="flex items-center gap-1.5 font-extrabold text-slate-950 text-sm">
                     <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
-                    <span>Note moyenne vérifiée : 4.9 / 5</span>
+                    <span>Avis vérifiés après location</span>
                   </div>
                   <p className="text-xs text-slate-500">
                     Consultez les retours d'expérience des locataires ayant loué cet équipement avec restitution de caution.

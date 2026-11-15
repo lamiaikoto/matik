@@ -140,6 +140,10 @@ export interface BookingRecord {
   ownerName?: string;
   ownerEmail?: string;
   ownerPhone?: string;
+  /** Identité Supabase (auth.users.id) du locataire — utilisée par la RLS. */
+  locataireId?: string;
+  /** Identité Supabase (auth.users.id) du loueur — utilisée par la RLS. */
+  loueurId?: string;
   clientName: string;
   clientEmail: string;
   clientPhone: string;
@@ -153,6 +157,7 @@ export interface BookingRecord {
   status: 'pending_payment' | 'en_attente_remise' | 'en_cours' | 'restitution_signalee' | 'restitue';
   restitutionSignaledAt?: string;
   stripeCautionStatus: 'sequestre_sans_debit' | 'caution_liberee' | 'litige_bloque';
+  stripePaymentIntentId?: string;
   stripeCautionPaymentIntentId?: string;
   stripeCautionSessionId?: string;
   stripeCautionUrl?: string;
@@ -165,6 +170,8 @@ export interface BookingRecord {
   renewalCount?: number;
   disputeReason?: string;
   disputedAt?: string;
+  paymentConfirmedAt?: string;
+  confirmationEmailSentAt?: string;
   createdAt: string;
   checkInReport?: InspectionReport;
   checkOutReport?: InspectionReport;
@@ -181,6 +188,8 @@ export interface MatikTrustScore {
 export interface EquipmentReview {
   id: string;
   equipmentId: string;
+  bookingId?: string;
+  authorId?: string;
   authorName: string;
   authorRole?: string;
   rating: number; // 1 à 5
@@ -188,5 +197,6 @@ export interface EquipmentReview {
   date: string;
   rentalDuration?: string;
   cautionRestituee?: boolean;
+  createdAt?: string;
 }
 

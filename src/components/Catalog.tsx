@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Equipment, BookingRecord } from '../types';
 import {
   Check,
@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { EQUIPMENT_CATEGORIES } from '../data/equipment';
 import { getEquipmentAvailability } from '../utils/availability';
+import { fetchAllReviews, summarizeByEquipment, subscribeToReviews, type RatingSummary } from '../lib/reviewService';
 import { CatalogSkeletonGrid } from './CatalogSkeletonGrid';
 
 interface CatalogProps {
@@ -41,6 +42,28 @@ export const Catalog: React.FC<CatalogProps> = ({
   onViewDetails,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('Tous');
+  const [ratingSummaries, setRatingSummaries] = useState<Record<string, RatingSummary>>({});
+
+  // Avis publics + temps réel : la note affichée est toujours la moyenne réelle.
+  // Aucun avis ⇒ « Nouveau » (jamais de 4,9/5 ou 5/5 fabriqué).
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadReviews = async () => {
+      const reviews = await fetchAllReviews();
+      if (!cancelled) setRatingSummaries(summarizeByEquipment(reviews));
+    };
+
+    void loadReviews();
+    const unsubscribe = subscribeToReviews(() => {
+      void loadReviews();
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
 
   // Le catalogue public ne présente que les annonces actives et publiées (is_published = true)
   const activeEquipments = useMemo(() => {
@@ -122,7 +145,7 @@ export const Catalog: React.FC<CatalogProps> = ({
                       isSelected ? 'bg-amber-400 text-slate-950 font-bold' : 'bg-slate-100 text-slate-600'
                     }`}
                   >
-                    {equipmentList.length}
+                    {activeEquipments.length}
                   </span>
                 )}
               </button>
@@ -131,7 +154,7 @@ export const Catalog: React.FC<CatalogProps> = ({
         </div>
 
         {/* Results summary (only when there are items) */}
-        {equipmentList.length > 0 && (
+        {activeEquipments.length > 0 && (
           <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
             <span className="flex items-center gap-2">
               <span>
@@ -191,6 +214,8 @@ export const Catalog: React.FC<CatalogProps> = ({
               const isSelected = selectedEquipmentId === item.id;
               const isParticulier = item.ownerType === 'particulier';
               const availability = getEquipmentAvailability(item, bookingList);
+              const ratingSummary = ratingSummaries[item.id];
+              const reviewCount = ratingSummary?.count || 0;
 
               return (
                 <div
@@ -321,16 +346,34 @@ export const Catalog: React.FC<CatalogProps> = ({
                         type="button"
                         onClick={() => onViewDetails?.(item, 'avis')}
                         className="pt-2.5 w-full flex items-center justify-between text-[11px] bg-slate-50 hover:bg-amber-50/60 px-2.5 py-1.5 rounded-xl border border-slate-100 hover:border-amber-200 transition-colors text-slate-600 text-left cursor-pointer"
-                        title="Voir les avis locataires et notes 5 étoiles vérifiées"
+                        title={
+                          reviewCount > 0
+                            ? `Voir les ${reviewCount} avis vérifiés après location`
+                            : 'Aucun avis pour le moment — équipement noté « Nouveau »'
+                        }
                       >
                         <div className="flex items-center gap-1 font-bold text-slate-900">
-                          <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
-                          <span>4.9</span>
-                          <span className="text-slate-400 font-normal">/5</span>
+                          <Star
+                            className={`w-3.5 h-3.5 ${
+                              reviewCount > 0 ? 'text-amber-500 fill-amber-400' : 'text-slate-300'
+                            }`}
+                          />
+                          {reviewCount > 0 ? (
+                            <>
+                              <span>{ratingSummary?.average?.toFixed(1)}</span>
+                              <span className="text-slate-400 font-normal">/5</span>
+                            </>
+                          ) : (
+                            <span className="text-slate-500">Nouveau</span>
+                          )}
                         </div>
                         <div className="flex items-center gap-1 text-emerald-700 font-bold text-[10px]">
-                          <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                          <span>100% Cautions sans litige</span>
+                          <ShieldCheck className={`w-3 h-3 ${reviewCount > 0 ? 'text-emerald-600' : 'text-slate-300'}`} />
+                          <span>
+                            {reviewCount > 0
+                              ? `${reviewCount} avis vérifié${reviewCount > 1 ? 's' : ''}`
+                              : 'Aucun avis'}
+                          </span>
                         </div>
                         <span className="text-[10px] text-amber-700 font-semibold underline">
                           Lire avis
@@ -418,7 +461,7 @@ export const Catalog: React.FC<CatalogProps> = ({
                           type="button"
                           onClick={() => onViewDetails(item, 'avis')}
                           className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-amber-50 hover:border-amber-300 text-slate-700 hover:text-amber-900 transition-colors cursor-pointer shrink-0"
-                          title="Consulter et déposer un avis 5 étoiles"
+                          title="Consulter les avis vérifiés et déposer un avis après location"
                         >
                           <MessageSquare className="w-4 h-4 text-amber-600" />
                         </button>

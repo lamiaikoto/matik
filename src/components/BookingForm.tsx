@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Equipment, BookingPayload, CurrentUser, ClientProfile, BookingRecord } from '../types';
+import { Equipment, BookingPayload, CurrentUser, BookingRecord } from '../types';
 import { submitBooking } from '../services/booking';
+import { supabase } from '../lib/supabase';
 import { getEquipmentAvailability } from '../utils/availability';
 import {
   Calendar,
@@ -56,7 +57,7 @@ interface BookingFormProps {
       loueurSent: boolean;
       errors?: string[];
     };
-  }) => void;
+  }) => void | Promise<void>;
   currentUser?: CurrentUser;
   onOpenAuthModal?: () => void;
 }
@@ -159,6 +160,21 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       return;
     }
 
+    // Réservation réservée aux utilisateurs authentifiés :
+    // la RLS Supabase impose locataire_id = auth.uid() et la synchro multi-appareils
+    // n'a de sens que si la réservation est rattachée à un compte.
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData?.user?.id) {
+        setSubmitError('Connectez-vous ou créez un compte pour réserver cet équipement.');
+        onOpenAuthModal?.();
+        return;
+      }
+    } catch {
+      setSubmitError('Impossible de vérifier votre session. Reconnectez-vous puis réessayez.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     const fullClientNom = `${clientPrenom} ${clientNom}`.trim();
@@ -223,23 +239,6 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         return;
       }
 
-      // Si aucune session n'est encore active, sauvegarder les coordonnées pour les réservations futures
-      if (!currentUser && clientPrenom.trim() && clientNom.trim() && clientEmail.trim()) {
-        const autoClient: ClientProfile = {
-          id: `client-${Date.now()}`,
-          role: 'client',
-          prenom: clientPrenom.trim(),
-          nom: clientNom.trim(),
-          name: fullClientNom,
-          email: clientEmail.trim(),
-          phone: clientTelephone.trim(),
-        };
-        try {
-          localStorage.setItem('matik_user_session', JSON.stringify(autoClient));
-          localStorage.setItem('matik_user', JSON.stringify(autoClient));
-        } catch {}
-      }
-
       // Sauvegarder l'URL de caution dans sessionStorage pour le retour paiement
       if (result.stripeCautionUrl) {
         try {
@@ -250,8 +249,9 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         } catch {}
       }
 
-      // Déclenche le flux de confirmation utilisateur avec tous les détails
-      onBookingSuccess(result.payload, {
+      // Déclenche le flux de confirmation utilisateur avec tous les détails.
+      // On attend la persistance Supabase : pas de redirection Stripe sans réservation enregistrée.
+      await onBookingSuccess(result.payload, {
         bookingId: result.bookingId,
         equipment: selectedEquipment,
         clientPrenom,
@@ -288,7 +288,11 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       }
     } catch (err: unknown) {
       console.error('[BookingForm] Erreur lors de la soumission de la réservation :', err);
-      setSubmitError('Une erreur inattendue est survenue. Veuillez vérifier votre connexion et réessayer.');
+      setSubmitError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Une erreur inattendue est survenue. Veuillez vérifier votre connexion et réessayer.'
+      );
     } finally {
       setIsSubmitting(false);
     }
