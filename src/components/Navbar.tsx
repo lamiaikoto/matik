@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PageType, CurrentUser } from '../types';
 import {
   Building2,
   User,
-  ArrowRight,
   LogOut,
   Menu,
   X,
@@ -14,6 +13,7 @@ import {
   Smartphone,
   Plus,
   Layers,
+  ChevronDown,
 } from 'lucide-react';
 import { MatikLogo } from './MatikLogo';
 import { LocaleSelector, LocaleSelectorMobile } from './LocaleSelector';
@@ -23,7 +23,7 @@ import { useTranslation } from 'react-i18next';
 interface NavbarProps {
   currentPage: PageType;
   onNavigate: (page: PageType) => void;
-  onOpenBooking: () => void;
+  onOpenBooking?: () => void;
   onOpenAuthModal: () => void;
   onOpenInstallModal: () => void;
   onOpenAddEquipment?: () => void;
@@ -34,7 +34,6 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   currentPage,
   onNavigate,
-  onOpenBooking,
   onOpenAuthModal,
   onOpenInstallModal,
   onOpenAddEquipment,
@@ -42,8 +41,25 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
   const { lang } = useLocale();
+
+  // Close user profile dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    if (userMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [userMenuOpen]);
 
   const isLoueur = currentUser?.role === 'loueur_pro' || currentUser?.role === 'loueur_particulier';
 
@@ -54,13 +70,32 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'garanties', label: t('nav.guarantees'), icon: ShieldCheck },
   ];
 
+  // Extraction propre et sans espace résiduel du nom d'affichage
+  const userDisplayName = (() => {
+    if (!currentUser) return '';
+    if (currentUser.role === 'loueur_pro') {
+      return (currentUser.companyName || currentUser.name || '').trim();
+    }
+    if (currentUser.role === 'loueur_particulier') {
+      const parts = [currentUser.prenom, currentUser.nom].filter(Boolean).join(' ').trim();
+      return parts || (currentUser.name || '').trim();
+    }
+    const clientParts = [currentUser.prenom, currentUser.nom].filter(Boolean).join(' ').trim();
+    return (
+      clientParts ||
+      (currentUser.name || '').trim() ||
+      (currentUser.email?.split('@')[0] || '').trim() ||
+      'Mon Compte'
+    );
+  })();
+
   // unused var suppressed
   void lang;
 
   return (
-    <header className="sticky top-0 z-40 w-full overflow-x-hidden border-b border-slate-200/90 bg-white/95 backdrop-blur-md shadow-xs">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 sm:gap-4 lg:gap-6 px-4 sm:px-6 lg:px-8 h-18 sm:h-20">
-        {/* Zone 1: Nouveau Logo Matik Moderne avec icône stylisée et typo Inter */}
+    <header className="sticky top-0 z-40 w-full max-w-full overflow-x-hidden border-b border-slate-200/90 bg-white/95 backdrop-blur-md shadow-xs">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 sm:gap-4 lg:gap-6 px-4 sm:px-6 lg:px-8 h-18 sm:h-20">
+        {/* Zone 1: Logo Matik */}
         <MatikLogo
           onClick={() => {
             onNavigate('accueil');
@@ -69,8 +104,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           size="md"
         />
 
-        {/* Zone 2: Navigation tabs / multi-page links - basculés en burger sous 1280px (xl) */}
-        <nav className="hidden xl:flex items-center gap-1 p-1 bg-slate-100/90 border border-slate-200 rounded-xl">
+        {/* Zone 2: Navigation tabs - visibles dès 1440px (2xl), sinon basculées dans le burger menu */}
+        <nav className="hidden 2xl:flex items-center gap-1 p-1 bg-slate-100/90 border border-slate-200 rounded-xl">
           {navLinks.map((tab) => {
             const isActive = currentPage === tab.id;
             const Icon = tab.icon;
@@ -99,14 +134,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           })}
         </nav>
 
-        {/* Zone 3: Bouton Déposer une annonce + Locale Selector + Connexion / Profil + CTA Réserver */}
-        <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-2.5 shrink-0">
+        {/* Zone 3: Bouton Déposer une annonce + Locale Selector + Profil avec menu déroulant */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           {/* Bouton direct "Déposer une annonce" accessible à tout moment */}
           {onOpenAddEquipment && (
             <button
               type="button"
               onClick={onOpenAddEquipment}
-              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl text-xs font-bold text-slate-800 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-all cursor-pointer whitespace-nowrap shrink-0 group"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-800 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-all cursor-pointer whitespace-nowrap shrink-0 group"
               title="Ajouter un article ou équipement à la location"
             >
               <Plus className="w-3.5 h-3.5 text-amber-600 group-hover:scale-110 transition-transform stroke-[2.5]" />
@@ -115,77 +150,110 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {/* Sélecteur Langue & Devise (desktop xl+) */}
-          <div className="hidden xl:block">
+          {/* Sélecteur Langue & Devise (desktop) */}
+          <div className="hidden sm:block shrink-0">
             <LocaleSelector compact />
           </div>
 
-          {/* User auth state */}
+          {/* User auth state : Badge compact avec menu déroulant au clic */}
           {currentUser ? (
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              {/* Bouton direct "Mes Annonces" accessible en 1 clic sur très grand écran (2xl) */}
+            <div ref={userMenuRef} className="relative inline-block text-left shrink-0">
               <button
                 type="button"
-                onClick={() => onNavigate('espace-loueur')}
-                title="Accéder directement à Mes Annonces et au Dashboard"
-                className={`hidden 2xl:inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  currentPage === 'espace-loueur'
-                    ? 'bg-amber-400 text-slate-950 font-black shadow-xs ring-1 ring-amber-500'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5 text-amber-600" />
-                <span>{t('nav.myAnnouncements')}</span>
-              </button>
-
-              {/* Profil utilisateur : compact avec max-w-[120px] truncate */}
-              <button
-                type="button"
-                onClick={() => onNavigate('espace-loueur')}
-                title="Accéder à votre espace"
-                className="hidden md:inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-800 transition-colors cursor-pointer shrink-0"
+                onClick={() => setUserMenuOpen((prev) => !prev)}
+                className="w-auto inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-800 transition-colors cursor-pointer shrink-0"
+                aria-expanded={userMenuOpen}
+                aria-haspopup="true"
+                title="Menu du compte utilisateur"
               >
                 {currentUser.role === 'loueur_pro' ? (
-                  <>
-                    <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                    <span className="max-w-[120px] truncate font-bold">
-                      {currentUser.companyName}
-                    </span>
-                  </>
+                  <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                 ) : currentUser.role === 'loueur_particulier' ? (
-                  <>
-                    <User className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span className="max-w-[120px] truncate font-bold">
-                      {currentUser.prenom} {currentUser.nom}
-                    </span>
-                  </>
+                  <User className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                 ) : (
-                  <>
-                    <User className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                    <span className="max-w-[120px] truncate font-bold">
-                      {currentUser.prenom ? `${currentUser.prenom} ${currentUser.nom || ''}`.trim() : currentUser.name}
-                    </span>
-                  </>
+                  <User className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                 )}
+                <span className="w-auto max-w-[120px] truncate font-bold text-slate-900">
+                  {userDisplayName}
+                </span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 shrink-0 ${
+                    userMenuOpen ? 'rotate-180 text-amber-600' : ''
+                  }`}
+                />
               </button>
 
-              {/* Bouton Déconnexion propre qui n'est JAMAIS coupé */}
-              <button
-                type="button"
-                onClick={onLogout}
-                title={t('nav.logoutChange')}
-                className="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl bg-slate-100 hover:bg-red-50 hover:text-red-600 hover:border-red-200 border border-slate-200 text-xs font-bold text-slate-600 transition-all cursor-pointer group shrink-0"
-              >
-                <LogOut className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5 shrink-0" />
-                <span className="hidden 2xl:inline">{t('nav.logout')}</span>
-              </button>
+              {/* Menu déroulant au clic sur le profil : regroupe Mes Annonces et Déconnexion */}
+              {userMenuOpen && (
+                <div className="absolute right-0 top-full mt-2 w-60 rounded-2xl bg-white border border-slate-200 shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="px-4 py-2.5 border-b border-slate-100 space-y-0.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-extrabold text-xs text-slate-950 truncate">
+                        {userDisplayName}
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-200 uppercase shrink-0">
+                        {currentUser.role === 'loueur_pro'
+                          ? 'Pro'
+                          : currentUser.role === 'loueur_particulier'
+                          ? 'Particulier'
+                          : 'Client'}
+                      </span>
+                    </div>
+                    {currentUser.email && (
+                      <div className="text-[11px] text-slate-500 truncate">{currentUser.email}</div>
+                    )}
+                  </div>
+
+                  <div className="py-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        onNavigate('espace-loueur');
+                      }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-bold text-slate-700 hover:text-slate-950 hover:bg-slate-50 transition-colors cursor-pointer text-left"
+                    >
+                      <Layers className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>{t('nav.myAnnouncements')}</span>
+                    </button>
+
+                    {onOpenAddEquipment && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          onOpenAddEquipment();
+                        }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-bold text-slate-700 hover:text-slate-950 hover:bg-slate-50 transition-colors cursor-pointer text-left"
+                      >
+                        <Plus className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>{t('nav.listItem')}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="pt-1 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        onLogout();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors cursor-pointer text-left"
+                    >
+                      <LogOut className="w-4 h-4 text-red-600 shrink-0" />
+                      <span>{t('nav.logout')}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
-            /* Connexion / Espace Loueur button */
+            /* Connexion / Inscription button */
             <button
               type="button"
               onClick={onOpenAuthModal}
-              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-2 text-xs font-semibold text-slate-800 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-800 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Building2 className="w-3.5 h-3.5 text-amber-600" />
               <span className="hidden sm:inline">{t('nav.loginSignup')}</span>
@@ -193,21 +261,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {/* Yellow Reserver CTA button with enhanced prominence */}
-          <button
-            type="button"
-            onClick={onOpenBooking}
-            className="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-slate-950 bg-amber-400 hover:bg-amber-300 active:scale-98 rounded-xl shadow-xs transition-all duration-150 whitespace-nowrap shrink-0 cursor-pointer"
-          >
-            <span>{t('nav.book')}</span>
-            <ArrowRight className="w-3.5 h-3.5 shrink-0 stroke-[2.5]" />
-          </button>
-
-          {/* Mobile hamburger menu toggle - visible sous 1280px (xl) */}
+          {/* Mobile hamburger menu toggle - visible sous 1440px (2xl) */}
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 xl:hidden rounded-lg bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-950 cursor-pointer shrink-0"
+            className="p-2 2xl:hidden rounded-lg bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-950 cursor-pointer shrink-0"
             aria-label="Menu de navigation"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -215,9 +273,9 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      {/* Mobile / Tablet dropdown navigation menu (< 1280px) */}
+      {/* Mobile / Tablet dropdown navigation menu (< 1440px) */}
       {mobileMenuOpen && (
-        <div className="xl:hidden border-b border-slate-200 bg-white px-4 py-3 space-y-2 shadow-lg animate-in fade-in slide-in-from-top-2 duration-150">
+        <div className="2xl:hidden border-b border-slate-200 bg-white px-4 py-3 space-y-2 shadow-lg animate-in fade-in slide-in-from-top-2 duration-150">
           {navLinks.map((tab) => {
             const isActive = currentPage === tab.id;
             const Icon = tab.icon;
@@ -275,13 +333,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <User className="w-4 h-4 text-emerald-600 shrink-0" />
                     )}
                     <span className="font-bold text-slate-900 text-xs truncate">
-                      {currentUser.role === 'loueur_pro'
-                        ? currentUser.companyName
-                        : currentUser.role === 'loueur_particulier'
-                        ? `${currentUser.prenom} ${currentUser.nom}`
-                        : currentUser.prenom
-                        ? `${currentUser.prenom} ${currentUser.nom || ''}`.trim()
-                        : currentUser.name}
+                      {userDisplayName}
                     </span>
                   </div>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-200 uppercase shrink-0">
@@ -327,7 +379,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }}
                 className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-colors"
               >
-                <Building2 className="w-4 h-4 text-amber-600" />
+                <Building2 className="w-3.5 h-3.5 text-amber-600" />
                 <span>Connexion / Inscription</span>
               </button>
             )}
