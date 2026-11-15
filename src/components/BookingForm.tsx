@@ -46,6 +46,9 @@ interface BookingFormProps {
     stripeCautionUrl?: string | null;
     stripeCautionSessionId?: string | null;
     stripeCautionPaymentIntentId?: string | null;
+    stripeCustomerId?: string | null;
+    stripePaymentMethodId?: string | null;
+    cautionAuthorizedAt?: string | null;
     contractPdfBase64?: string;
     contractFilename?: string;
     emailDeliveryStatus?: {
@@ -268,6 +271,9 @@ export const BookingForm: React.FC<BookingFormProps> = ({
         stripeCautionUrl: result.stripeCautionUrl || null,
         stripeCautionSessionId: result.stripeCautionSessionId || null,
         stripeCautionPaymentIntentId: result.stripeCautionPaymentIntentId || null,
+        stripeCustomerId: result.stripeCustomerId || null,
+        stripePaymentMethodId: result.stripePaymentMethodId || null,
+        cautionAuthorizedAt: result.cautionAuthorizedAt || new Date().toISOString(),
         contractPdfBase64: result.contract?.pdfBase64,
         contractFilename: result.contract?.filename,
         emailDeliveryStatus: result.email,

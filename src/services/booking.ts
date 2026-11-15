@@ -55,6 +55,9 @@ export interface BookingResult {
   stripeCautionUrl?: string | null;
   stripeCautionSessionId?: string | null;
   stripeCautionPaymentIntentId?: string | null;
+  stripeCustomerId?: string | null;
+  stripePaymentMethodId?: string | null;
+  cautionAuthorizedAt?: string | null;
   contract?: {
     generated: boolean;
     sizeBytes: number;
@@ -221,6 +224,9 @@ export async function submitBooking(bookingData: BookingSubmissionData): Promise
       stripeCautionUrl: responseData?.stripe?.cautionCheckoutUrl || null,
       stripeCautionSessionId: responseData?.stripe?.cautionSessionId || null,
       stripeCautionPaymentIntentId: responseData?.stripe?.cautionPaymentIntentId || null,
+      stripeCustomerId: responseData?.stripe?.stripeCustomerId || responseData?.stripe?.customerId || null,
+      stripePaymentMethodId: responseData?.stripe?.paymentMethodId || null,
+      cautionAuthorizedAt: responseData?.stripe?.cautionAuthorizedAt || null,
       contract: responseData?.contract,
       email: responseData?.email,
     };
@@ -305,5 +311,34 @@ export async function releaseStripeCautionApi(params: {
   } catch (e: any) {
     console.error('❌ [releaseStripeCautionApi Error]', e);
     return { success: false, error: e?.message || 'Erreur réseau libération caution' };
+  }
+}
+
+/**
+ * Récupère les détails du PaymentIntent, Customer et PaymentMethod après confirmation Stripe Checkout.
+ * Permet d'enregistrer le stripeCustomerId et stripePaymentMethodId pour le renouvellement off-session.
+ */
+export async function syncCautionSessionDetailsApi(sessionId: string): Promise<{
+  success: boolean;
+  paymentIntentId?: string;
+  customerId?: string;
+  paymentMethodId?: string;
+  cautionAuthorizedAt?: string;
+  error?: string;
+}> {
+  try {
+    const apiUrl = `${getApiBaseUrl()}/booking`;
+    const res = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'get_caution_session_details',
+        sessionId,
+      }),
+    });
+    return await res.json();
+  } catch (e: any) {
+    console.warn('⚠️ [syncCautionSessionDetailsApi Notice]', e);
+    return { success: false, error: e?.message };
   }
 }

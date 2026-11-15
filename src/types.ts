@@ -154,6 +154,13 @@ export interface BookingRecord {
   stripeCautionPaymentIntentId?: string;
   stripeCautionSessionId?: string;
   stripeCautionUrl?: string;
+  stripeCustomerId?: string;
+  stripePaymentMethodId?: string;
+  cautionAuthorizedAt?: string;
+  cautionRenewalFailed?: boolean;
+  cautionRenewalError?: string;
+  lastCautionRenewalAt?: string;
+  renewalCount?: number;
   disputeReason?: string;
   disputedAt?: string;
   createdAt: string;

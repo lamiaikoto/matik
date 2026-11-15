@@ -55,6 +55,9 @@ export interface StripeHoldData {
   montantCaution: number;
   totalLocation: number;
   appUrl: string;
+  startDate?: string;
+  endDate?: string;
+  dureeJours?: number;
   /** ID du compte Stripe Connect du loueur (optionnel) */
   loueurStripeAccountId?: string;
 }
@@ -64,6 +67,8 @@ export interface StripeHoldResult {
   sessionId?: string;
   checkoutUrl?: string;
   paymentIntentId?: string;
+  customerId?: string;
+  cautionAuthorizedAt?: string;
   error?: string;
 }
 
@@ -72,6 +77,7 @@ export interface StripePaymentResult {
   sessionId?: string;
   checkoutUrl?: string;
   paymentIntentId?: string;
+  customerId?: string;
   error?: string;
 }
 
@@ -466,16 +472,46 @@ async function sendBookingEmails(
   return { clientSent, loueurSent, clientMessageId, loueurMessageId, errors };
 }
 
-// ─── 3a. STRIPE — ENCAISSEMENT RÉEL DE LA LOCATION ──────────
+// ─── 3a. STRIPE — GESTION DES CLIENTS & PAIEMENTS ──────────
+/**
+ * Recherche ou crée un Client Stripe pour conserver les moyens de paiement et permettre les renouvellements automatiques de caution.
+ */
+async function getOrCreateStripeCustomer(
+  stripe: Stripe,
+  email: string,
+  name: string
+): Promise<string> {
+  const cleanEmail = email.trim().toLowerCase();
+  try {
+    const existing = await stripe.customers.list({ email: cleanEmail, limit: 1 });
+    if (existing.data.length > 0) {
+      console.log(`👤 [Stripe Customer] Client existant réutilisé : ${existing.data[0].id} (${cleanEmail})`);
+      return existing.data[0].id;
+    }
+  } catch (err: any) {
+    console.warn(`⚠️ [Stripe Customer] Erreur recherche : ${err?.message || err}`);
+  }
+
+  const customer = await stripe.customers.create({
+    email: cleanEmail,
+    name: name.trim() || undefined,
+    metadata: {
+      source: 'matik_booking_platform',
+    },
+  });
+  console.log(`👤 [Stripe Customer] Nouveau client créé : ${customer.id} (${cleanEmail})`);
+  return customer.id;
+}
+
 /**
  * Crée une session Stripe Checkout pour l'encaissement réel des frais de location.
  *
  * - mode: 'payment' avec capture_method: 'automatic' (débit immédiat)
+ * - setup_future_usage: 'off_session' pour attacher la carte au Customer pour les cautions ultérieures
  * - application_fee_amount : 10 % des frais de service Matik (en centimes)
  * - transfer_data.destination : compte Stripe Connect du loueur (si disponible)
- * - success_url : redirection vers https://matikilou.com/?stripe_status=payment_ok&booking_id=${bookingId}
  */
-async function createStripePaymentSession(data: StripeHoldData): Promise<StripePaymentResult> {
+async function createStripePaymentSession(data: StripeHoldData, customerId?: string): Promise<StripePaymentResult> {
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey || !secretKey.trim()) {
     console.warn('⚠️ [Stripe] STRIPE_SECRET_KEY non configurée — session paiement ignorée.');
@@ -491,6 +527,8 @@ async function createStripePaymentSession(data: StripeHoldData): Promise<StripeP
       return { success: true };
     }
 
+    const effectiveCustomerId = customerId || (await getOrCreateStripeCustomer(stripe, data.clientEmail, data.clientNom));
+
     // Commission Matik : 10 % du total HT de location (arrondi en centimes)
     const applicationFeeCents = Math.round(totalCents * 0.10);
 
@@ -503,6 +541,7 @@ async function createStripePaymentSession(data: StripeHoldData): Promise<StripeP
 
     type PaymentIntentParams = {
       capture_method: 'automatic';
+      setup_future_usage: 'off_session';
       description: string;
       metadata: Record<string, string>;
       application_fee_amount?: number;
@@ -511,12 +550,14 @@ async function createStripePaymentSession(data: StripeHoldData): Promise<StripeP
 
     const paymentIntentData: PaymentIntentParams = {
       capture_method: 'automatic',
+      setup_future_usage: 'off_session',
       description: `Location Matik — ${data.equipmentName} (Réf: ${data.bookingId})`,
       metadata: {
         booking_id: data.bookingId,
         equipment_id: data.equipmentId,
         equipment_name: data.equipmentName,
         client_email: data.clientEmail,
+        customer_id: effectiveCustomerId,
         type: 'location_payment',
       },
     };
@@ -534,8 +575,12 @@ async function createStripePaymentSession(data: StripeHoldData): Promise<StripeP
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      customer_email: data.clientEmail,
-      payment_intent_data: paymentIntentData,
+      customer: effectiveCustomerId,
+      customer_update: {
+        name: 'auto',
+        address: 'auto',
+      },
+      payment_intent_data: paymentIntentData as any,
       line_items: [
         {
           price_data: {
@@ -553,6 +598,7 @@ async function createStripePaymentSession(data: StripeHoldData): Promise<StripeP
         booking_id: data.bookingId,
         equipment_id: data.equipmentId,
         type: 'matik_location_payment',
+        customer_id: effectiveCustomerId,
         loueur_stripe_account: data.loueurStripeAccountId || 'none',
         application_fee_cents: String(applicationFeeCents),
       },
@@ -561,13 +607,14 @@ async function createStripePaymentSession(data: StripeHoldData): Promise<StripeP
       expires_at: expiresAt,
     });
 
-    console.log(`✅ [Stripe Payment] Session paiement créée : ${session.id} (${data.totalLocation} €, commission ${(applicationFeeCents / 100).toFixed(2)} €)`);
+    console.log(`✅ [Stripe Payment] Session paiement créée : ${session.id} (${data.totalLocation} €, customer: ${effectiveCustomerId})`);
 
     return {
       success: true,
       sessionId: session.id,
       checkoutUrl: session.url || undefined,
       paymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : undefined,
+      customerId: effectiveCustomerId,
     };
   } catch (err: any) {
     console.error('❌ [Stripe Payment] Erreur session paiement :', err?.message || err);
@@ -575,15 +622,15 @@ async function createStripePaymentSession(data: StripeHoldData): Promise<StripeP
   }
 }
 
-// ─── 3b. STRIPE — EMPREINTE DE CAUTION (NON DÉBITÉE) ─────────
+// ─── 3b. STRIPE — EMPREINTE DE CAUTION (NON DÉBITÉE & RENOUVELABLE) ───
 /**
  * Crée une session Stripe Checkout pour l'empreinte bancaire de caution.
  *
  * - mode: 'payment' avec capture_method: 'manual' (autorisation sans débit)
- * - Le montant est pré-autorisé mais jamais capturé automatiquement
- * - Peut être capturé (en cas de litige) ou libéré après restitution
+ * - setup_future_usage: 'off_session' pour conserver le moyen de paiement pour les renouvellements tous les 6 jours
+ * - request_extended_authorization: 'if_available' pour étendre la durée de pré-autorisation
  */
-async function createStripeCautionSession(data: StripeHoldData): Promise<StripeHoldResult> {
+async function createStripeCautionSession(data: StripeHoldData, customerId?: string): Promise<StripeHoldResult> {
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey || !secretKey.trim()) {
     console.warn('⚠️ [Stripe] STRIPE_SECRET_KEY non configurée — session caution ignorée.');
@@ -598,20 +645,37 @@ async function createStripeCautionSession(data: StripeHoldData): Promise<StripeH
       return { success: true };
     }
 
-    // expires_at : 45 min dans le futur
+    const effectiveCustomerId = customerId || (await getOrCreateStripeCustomer(stripe, data.clientEmail, data.clientNom));
     const expiresAt = Math.floor(Date.now() / 1000) + 45 * 60;
+    const cautionAuthorizedAt = new Date().toISOString();
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      customer_email: data.clientEmail,
+      customer: effectiveCustomerId,
+      customer_update: {
+        name: 'auto',
+        address: 'auto',
+      },
       payment_intent_data: {
         capture_method: 'manual',
+        setup_future_usage: 'off_session',
+        payment_method_options: {
+          card: {
+            request_extended_authorization: 'if_available',
+          },
+        },
         description: `Caution location Matik — ${data.equipmentName} (Réf: ${data.bookingId})`,
         metadata: {
           booking_id: data.bookingId,
           equipment_id: data.equipmentId,
           equipment_name: data.equipmentName,
           client_email: data.clientEmail,
+          customer_id: effectiveCustomerId,
+          start_date: data.startDate || '',
+          end_date: data.endDate || '',
+          duree_jours: String(data.dureeJours || 1),
+          montant_caution: String(data.montantCaution),
+          caution_authorized_at: cautionAuthorizedAt,
           type: 'caution_empreinte_bancaire',
         },
       },
@@ -632,19 +696,23 @@ async function createStripeCautionSession(data: StripeHoldData): Promise<StripeH
         booking_id: data.bookingId,
         equipment_id: data.equipmentId,
         type: 'matik_caution_hold',
+        customer_id: effectiveCustomerId,
+        caution_authorized_at: cautionAuthorizedAt,
       },
       success_url: `${(process.env.APP_URL || data.appUrl || 'https://matikilou.com').replace(/\/+$/, '')}/booking-success?stripe_status=caution_ok&booking_id=${data.bookingId}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${(process.env.APP_URL || data.appUrl || 'https://matikilou.com').replace(/\/+$/, '')}/booking-success?stripe_status=cancel&booking_id=${data.bookingId}`,
       expires_at: expiresAt,
     });
 
-    console.log(`✅ [Stripe Caution] Session empreinte créée : ${session.id} (${data.montantCaution} €)`);
+    console.log(`✅ [Stripe Caution] Session empreinte créée : ${session.id} (${data.montantCaution} €, customer: ${effectiveCustomerId})`);
 
     return {
       success: true,
       sessionId: session.id,
       checkoutUrl: session.url || undefined,
       paymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : undefined,
+      customerId: effectiveCustomerId,
+      cautionAuthorizedAt,
     };
   } catch (err: any) {
     console.error('❌ [Stripe Caution] Erreur session caution :', err?.message || err);
@@ -656,9 +724,20 @@ async function createStripeCautionSession(data: StripeHoldData): Promise<StripeH
 async function createStripeCheckoutSessions(data: StripeHoldData): Promise<StripeSessionsResult> {
   console.log('💳 [Stripe] Création des sessions paiement + caution...');
 
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  let customerId: string | undefined;
+  if (secretKey && secretKey.trim()) {
+    try {
+      const stripe = new Stripe(secretKey.trim(), { apiVersion: '2024-11-20.acacia' } as any);
+      customerId = await getOrCreateStripeCustomer(stripe, data.clientEmail, data.clientNom);
+    } catch (e: any) {
+      console.warn('⚠️ [Stripe] Erreur création/récupération customer:', e?.message || e);
+    }
+  }
+
   const [payment, caution] = await Promise.all([
-    createStripePaymentSession(data),
-    createStripeCautionSession(data),
+    createStripePaymentSession(data, customerId),
+    createStripeCautionSession(data, customerId),
   ]);
 
   if (!payment.success) {
@@ -856,6 +935,43 @@ export default async function handler(req: any, res: any) {
       });
     }
 
+    // ─── ACTION SPÉCIALE : RÉCUPÉRATION DES DÉTAILS DE LA SESSION CAUTION ───
+    if (body.action === 'get_caution_session_details') {
+      const sessionId = String(body.sessionId || body.session_id || '').trim();
+      console.log(`🔍 [Vercel API Booking] Récupération détails session Stripe : ${sessionId}`);
+
+      const secretKey = process.env.STRIPE_SECRET_KEY;
+      if (!secretKey || !secretKey.trim() || !sessionId) {
+        return res.status(200).json({ success: false, error: 'Clé Stripe ou sessionId absent' });
+      }
+
+      try {
+        const stripe = new Stripe(secretKey.trim(), { apiVersion: '2024-11-20.acacia' } as any);
+        const session = await stripe.checkout.sessions.retrieve(sessionId, {
+          expand: ['payment_intent', 'payment_intent.payment_method'],
+        });
+
+        const pi = typeof session.payment_intent === 'object' ? (session.payment_intent as any) : null;
+        const piId = pi ? pi.id : (typeof session.payment_intent === 'string' ? session.payment_intent : null);
+        const customerId = (typeof session.customer === 'string' ? session.customer : (session.customer as any)?.id) || (typeof pi?.customer === 'string' ? pi.customer : pi?.customer?.id) || null;
+        const pm = pi?.payment_method;
+        const paymentMethodId = typeof pm === 'string' ? pm : (pm?.id || null);
+        const authorizedAt = pi?.created ? new Date(pi.created * 1000).toISOString() : new Date().toISOString();
+
+        return res.status(200).json({
+          success: true,
+          sessionId: session.id,
+          paymentIntentId: piId,
+          customerId,
+          paymentMethodId,
+          cautionAuthorizedAt: authorizedAt,
+        });
+      } catch (err: any) {
+        console.warn('⚠️ [Vercel API Booking] Erreur récupération session caution :', err?.message || err);
+        return res.status(200).json({ success: false, error: err?.message });
+      }
+    }
+
     console.log('📦 Corps reçu (clés) :', Object.keys(body).join(', '));
     console.log(`👤 Client : "${body.clientPrenom} ${body.clientNom}" <${body.clientEmail}>`);
     console.log(`🏢 Loueur : "${body.loueurNom || body.artisanNom}" <${body.loueurEmail}>`);
@@ -948,6 +1064,9 @@ export default async function handler(req: any, res: any) {
       montantCaution: contractData.montantCaution,
       totalLocation: contractData.totalLocation,
       appUrl,
+      startDate: contractData.startDate,
+      endDate: contractData.endDate,
+      dureeJours: contractData.dureeJours,
       loueurStripeAccountId: loueurStripeAccountId || undefined,
     };
 
@@ -991,6 +1110,8 @@ export default async function handler(req: any, res: any) {
         cautionSessionId: stripeSessions.caution.sessionId || null,
         cautionPaymentIntentId: stripeSessions.caution.paymentIntentId || null,
         sessionId: stripeSessions.payment.sessionId || stripeSessions.caution.sessionId || null,
+        stripeCustomerId: stripeSessions.caution.customerId || stripeSessions.payment.customerId || null,
+        cautionAuthorizedAt: stripeSessions.caution.cautionAuthorizedAt || new Date().toISOString(),
         error: stripeSessions.payment.error || stripeSessions.caution.error || null,
       },
       payload: {

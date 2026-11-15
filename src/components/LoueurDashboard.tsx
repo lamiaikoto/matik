@@ -1579,12 +1579,36 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                                   ? '· Caution libérée'
                                   : booking.stripeCautionStatus === 'litige_bloque'
                                   ? '· Litige (bloquée)'
+                                  : booking.cautionRenewalFailed
+                                  ? '· Échec renouvellement'
+                                  : booking.renewalCount && booking.renewalCount > 0
+                                  ? `· Renouvelée (x${booking.renewalCount})`
                                   : '· Sous séquestre'}
                               </span>
                             </span>
                           </div>
                         </div>
                       </div>
+
+                      {/* Alerte si le renouvellement automatique de la caution a échoué */}
+                      {booking.cautionRenewalFailed && (
+                        <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-900 text-xs flex items-start justify-between gap-3 animate-in fade-in">
+                          <div className="flex items-start gap-2.5">
+                            <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                            <div className="space-y-0.5">
+                              <span className="font-extrabold text-red-800 uppercase tracking-wider text-[11px] block">
+                                Alerte caution : Renouvellement automatique échoué
+                              </span>
+                              <p className="text-red-700 leading-relaxed text-[11px]">
+                                Le renouvellement périodique de l'empreinte bancaire a échoué ({booking.cautionRenewalError || 'plafond bancaire atteint ou carte expirée'}). Veuillez contacter le locataire pour régulariser l'empreinte de caution.
+                              </p>
+                            </div>
+                          </div>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-900 border border-red-300 uppercase shrink-0">
+                            Action requise
+                          </span>
+                        </div>
+                      )}
 
                       {/* Système de mise en relation directe : Carte de la contrepartie (Appel & WhatsApp 1-clic) */}
                       <CounterpartContactCard

@@ -34,7 +34,7 @@ import {
   subscribeToEquipments,
   generateUUID,
 } from './lib/equipmentService';
-import { sendConfirmationEmailAfterValidation, releaseStripeCautionApi } from './services/booking';
+import { sendConfirmationEmailAfterValidation, releaseStripeCautionApi, syncCautionSessionDetailsApi } from './services/booking';
 import {
   Equipment,
   BookingPayload,
@@ -220,6 +220,36 @@ export default function App() {
         // CAS 2 : Caution validée (ou confirmation finale)
         if (stripeStatus === 'caution_ok') {
           console.log(`✅ [Stripe Flow] Caution validée pour ${bookingRef}. Confirmation de la réservation.`);
+          const sessionId = extractUrlParam('session_id');
+
+          // Synchronisation des détails Customer, PaymentMethod et PaymentIntent depuis Stripe
+          if (sessionId) {
+            syncCautionSessionDetailsApi(sessionId).then((details) => {
+              if (details.success) {
+                console.log('💳 [Stripe Details] Customer & PaymentMethod enregistrés pour renouvellement :', details);
+                setBookingList((prev) => {
+                  const updated = prev.map((b) => {
+                    const isMatch = bookingRef
+                      ? (b.id === bookingRef || (b as any).bookingId === bookingRef)
+                      : b.status === 'en_attente_remise' || b.status === 'pending_payment';
+                    if (isMatch) {
+                      return {
+                        ...b,
+                        stripeCautionPaymentIntentId: details.paymentIntentId || b.stripeCautionPaymentIntentId,
+                        stripeCustomerId: details.customerId || b.stripeCustomerId,
+                        stripePaymentMethodId: details.paymentMethodId || b.stripePaymentMethodId,
+                        cautionAuthorizedAt: details.cautionAuthorizedAt || b.cautionAuthorizedAt || new Date().toISOString(),
+                      };
+                    }
+                    return b;
+                  });
+                  try { localStorage.setItem('matik_bookings', JSON.stringify(updated)); } catch {}
+                  return updated;
+                });
+              }
+            }).catch((err) => console.warn('⚠️ [Stripe Details] Erreur récupération détails:', err));
+          }
+
           try {
             // Passe la réservation de 'pending_payment' → 'en_attente_remise' (paiement + caution confirmés)
             setBookingList((prev) => {
@@ -794,6 +824,9 @@ export default function App() {
       stripeCautionUrl?: string | null;
       stripeCautionSessionId?: string | null;
       stripeCautionPaymentIntentId?: string | null;
+      stripeCustomerId?: string | null;
+      stripePaymentMethodId?: string | null;
+      cautionAuthorizedAt?: string | null;
     }
   ) => {
     setLastPayload(payload);
@@ -834,6 +867,9 @@ export default function App() {
       stripeCautionUrl: details.stripeCautionUrl || undefined,
       stripeCautionSessionId: details.stripeCautionSessionId || undefined,
       stripeCautionPaymentIntentId: details.stripeCautionPaymentIntentId || undefined,
+      stripeCustomerId: details.stripeCustomerId || undefined,
+      stripePaymentMethodId: details.stripePaymentMethodId || undefined,
+      cautionAuthorizedAt: details.cautionAuthorizedAt || new Date().toISOString(),
       createdAt: new Date().toISOString(),
     };
 
