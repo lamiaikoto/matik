@@ -27,6 +27,7 @@ interface BookingFormProps {
   bookingList?: BookingRecord[];
   onSelectEquipment: (equipment: Equipment) => void;
   onBookingSuccess: (payload: BookingPayload, fullDetails: {
+    bookingId?: string;
     equipment: Equipment;
     clientPrenom: string;
     clientNom: string;
@@ -248,6 +249,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
 
       // Déclenche le flux de confirmation utilisateur avec tous les détails
       onBookingSuccess(result.payload, {
+        bookingId: result.bookingId,
         equipment: selectedEquipment,
         clientPrenom,
         clientNom,

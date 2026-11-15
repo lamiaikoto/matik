@@ -55,9 +55,12 @@ export function getEquipmentAvailability(
   const today = new Date().toISOString().split('T')[0];
 
   // Trouve toutes les réservations actives pour cet équipement dont la date de fin est >= aujourd'hui
+  // ⚠️ Les réservations 'pending_payment' sont EXCLUES : le paiement n'est pas encore confirmé.
+  //    Une réservation en attente de paiement ne rend pas l'annonce indisponible.
   const activeBookings = bookingList.filter((b) => {
     if (b.equipmentId !== equipment.id) return false;
     if (b.status === 'restitue') return false;
+    if (b.status === 'pending_payment') return false; // Paiement non confirmé → annonce reste disponible
     if (!b.endDate) return false;
     const endStr = b.endDate.split('T')[0];
     return endStr >= today;
@@ -123,6 +126,7 @@ export function isEquipmentRented(
   const active = bookingList.find((b) => {
     if (b.equipmentId !== equipmentId) return false;
     if (b.status === 'restitue') return false;
+    if (b.status === 'pending_payment') return false; // Paiement non confirmé → disponible
     if (!b.endDate) return false;
     return b.endDate.split('T')[0] >= today;
   });

@@ -1503,6 +1503,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                 {bookingList.map((booking) => {
                   const isCautionReleased = booking.stripeCautionStatus === 'caution_liberee';
                   const isCompleted = booking.status === 'restitue';
+                  const isPendingPayment = booking.status === 'pending_payment';
 
                   return (
                     <div
@@ -1603,6 +1604,8 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                                 ? 'bg-emerald-500'
                                 : booking.status === 'en_cours'
                                 ? 'bg-blue-500 animate-pulse'
+                                : isPendingPayment
+                                ? 'bg-orange-400 animate-pulse'
                                 : 'bg-amber-500'
                             }`}
                           />
@@ -1611,11 +1614,21 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                               ? 'Location terminée · Restitution conforme'
                               : booking.status === 'en_cours'
                               ? 'En cours de location'
+                              : isPendingPayment
+                              ? '⏳ Paiement Stripe en attente — annonce disponible'
                               : 'En attente de remise des clés'}
                           </span>
                         </div>
 
                         <div className="flex items-center gap-2">
+                          {/* Pas de boutons d'action pour une réservation en attente de paiement */}
+                          {isPendingPayment ? (
+                            <span className="px-3.5 py-2 rounded-xl bg-orange-50 text-orange-800 border border-orange-200 font-bold text-xs flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+                              <span>En attente de paiement Stripe</span>
+                            </span>
+                          ) : (
+                            <>
                           {/* État des lieux départ */}
                           {onOpenInspectionModal && !isCompleted && (
                             <button
@@ -1694,6 +1707,8 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                               <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
                               <span>Avis</span>
                             </button>
+                          )}
+                            </>
                           )}
                         </div>
                       </div>

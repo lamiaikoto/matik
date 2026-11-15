@@ -969,7 +969,8 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({
       success: true,
       bookingId,
-      message: 'Réservation validée et sessions de paiement initialisées.',
+      status: 'pending_payment',
+      message: 'Réservation validée en attente de règlement et sessions de paiement initialisées.',
       contract: {
         generated: true,
         sizeBytes: pdfBuffer.length,
