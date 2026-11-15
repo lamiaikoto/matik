@@ -19,8 +19,7 @@
   }
 
   html,
-  body,
-  #root {
+  body {
     max-width: 100%;
     overflow-x: hidden;
     width: 100%;

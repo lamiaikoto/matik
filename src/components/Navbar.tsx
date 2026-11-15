@@ -46,7 +46,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const { t } = useTranslation();
   const { lang } = useLocale();
 
-  // Close user profile dropdown on click outside
+  // Fermer le menu déroulant profil au clic en dehors
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
@@ -93,19 +93,21 @@ export const Navbar: React.FC<NavbarProps> = ({
   void lang;
 
   return (
-    <header className="sticky top-0 z-40 w-full max-w-full overflow-x-hidden border-b border-slate-200/90 bg-white/95 backdrop-blur-md shadow-xs">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 sm:gap-4 lg:gap-6 px-4 sm:px-6 lg:px-8 h-18 sm:h-20">
-        {/* Zone 1: Logo Matik */}
-        <MatikLogo
-          onClick={() => {
-            onNavigate('accueil');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-          size="md"
-        />
+    <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-xs">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8 h-16 sm:h-20">
+        {/* Zone 1 (À gauche) : Logo Matik (toujours visible sur mobile et ordinateur) */}
+        <div className="flex items-center shrink-0">
+          <MatikLogo
+            onClick={() => {
+              onNavigate('accueil');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            size="md"
+          />
+        </div>
 
-        {/* Zone 2: Navigation tabs - visibles dès 1440px (2xl), sinon basculées dans le burger menu */}
-        <nav className="hidden 2xl:flex items-center gap-1 p-1 bg-slate-100/90 border border-slate-200 rounded-xl">
+        {/* Zone 2 (Au centre) : Liens principaux visibles sur ordinateur (lg:flex) */}
+        <nav className="hidden lg:flex items-center gap-1.5 p-1 bg-slate-100/90 border border-slate-200 rounded-xl">
           {navLinks.map((tab) => {
             const isActive = currentPage === tab.id;
             const Icon = tab.icon;
@@ -118,7 +120,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   onNavigate(tab.id);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                   isActive
                     ? 'bg-slate-900 text-white shadow-xs font-bold'
                     : 'text-slate-600 hover:text-slate-950 hover:bg-slate-200/70'
@@ -134,9 +136,9 @@ export const Navbar: React.FC<NavbarProps> = ({
           })}
         </nav>
 
-        {/* Zone 3: Bouton Déposer une annonce + Locale Selector + Profil avec menu déroulant */}
+        {/* Zone 3 (À droite) : Bouton + Déposer une annonce, Badge Profil (lamia ▾) avec menu déroulant, Menu burger */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          {/* Bouton direct "Déposer une annonce" accessible à tout moment */}
+          {/* Bouton compact "Déposer une annonce" */}
           {onOpenAddEquipment && (
             <button
               type="button"
@@ -151,11 +153,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
 
           {/* Sélecteur Langue & Devise (desktop) */}
-          <div className="hidden sm:block shrink-0">
+          <div className="hidden md:block shrink-0">
             <LocaleSelector compact />
           </div>
 
-          {/* User auth state : Badge compact avec menu déroulant au clic */}
+          {/* Badge Profil (lamia ▾) avec menu déroulant vertical au clic */}
           {currentUser ? (
             <div ref={userMenuRef} className="relative inline-block text-left shrink-0">
               <button
@@ -183,9 +185,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 />
               </button>
 
-              {/* Menu déroulant au clic sur le profil : regroupe Mes Annonces et Déconnexion */}
+              {/* Menu déroulant vertical au clic sur le badge profil */}
               {userMenuOpen && (
-                <div className="absolute right-0 top-full mt-2 w-60 rounded-2xl bg-white border border-slate-200 shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="absolute right-0 top-full mt-2 w-60 rounded-2xl bg-white border border-slate-200 shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                   <div className="px-4 py-2.5 border-b border-slate-100 space-y-0.5">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-extrabold text-xs text-slate-950 truncate">
@@ -249,11 +251,11 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </div>
           ) : (
-            /* Connexion / Inscription button */
+            /* Bouton Connexion / Inscription */
             <button
               type="button"
               onClick={onOpenAuthModal}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-800 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-800 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Building2 className="w-3.5 h-3.5 text-amber-600" />
               <span className="hidden sm:inline">{t('nav.loginSignup')}</span>
@@ -261,11 +263,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {/* Mobile hamburger menu toggle - visible sous 1440px (2xl) */}
+          {/* Bouton Menu burger sur mobile/tablette (lg:hidden) */}
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 2xl:hidden rounded-lg bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-950 cursor-pointer shrink-0"
+            className="p-2 lg:hidden rounded-lg bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-950 cursor-pointer shrink-0"
             aria-label="Menu de navigation"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -273,9 +275,9 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      {/* Mobile / Tablet dropdown navigation menu (< 1440px) */}
+      {/* Menu déroulant responsive mobile/tablette (< 1024px / lg:hidden) */}
       {mobileMenuOpen && (
-        <div className="2xl:hidden border-b border-slate-200 bg-white px-4 py-3 space-y-2 shadow-lg animate-in fade-in slide-in-from-top-2 duration-150">
+        <div className="lg:hidden border-b border-slate-200 bg-white px-4 py-3 space-y-2 shadow-lg animate-in fade-in slide-in-from-top-2 duration-150">
           {navLinks.map((tab) => {
             const isActive = currentPage === tab.id;
             const Icon = tab.icon;
@@ -304,7 +306,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             );
           })}
 
-          {/* Mobile direct add equipment button */}
+          {/* Bouton direct déposer annonce dans le menu mobile */}
           {onOpenAddEquipment && (
             <div className="pt-2">
               <button
@@ -321,7 +323,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           )}
 
-          {/* Mobile Profile & Logout or Auth CTA */}
+          {/* Profil et Déconnexion dans le menu mobile */}
           <div className="pt-2 border-t border-slate-100">
             {currentUser ? (
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
