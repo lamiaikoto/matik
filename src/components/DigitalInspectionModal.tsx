@@ -22,6 +22,7 @@ interface DigitalInspectionModalProps {
   equipment: Equipment | null;
   booking?: BookingRecord | null;
   type: 'check_in' | 'check_out';
+  isTenantSignaling?: boolean;
   onSaveReport: (report: InspectionReport, releaseCaution?: boolean) => void;
   onOpenReview?: (equipment: Equipment) => void;
 }
@@ -32,6 +33,7 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
   equipment,
   booking,
   type,
+  isTenantSignaling = false,
   onSaveReport,
   onOpenReview,
 }) => {
@@ -79,18 +81,19 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
     e.preventDefault();
     const photos = [photo1, photo2, photo3].filter(Boolean);
 
-    const shouldReleaseCaution = type === 'check_out' && !hasDispute;
+    const shouldReleaseCaution = type === 'check_out' && !hasDispute && !isTenantSignaling;
 
     const report: InspectionReport = {
       id: `report-${Date.now()}`,
       bookingId: booking?.id || `sim-${Date.now()}`,
       type,
+      submittedBy: isTenantSignaling ? 'client' : 'loueur',
       timestamp: new Date().toISOString(),
       photos: photos.length > 0 ? photos : [equipment?.image || ''],
       cleanliness,
       functionalStatus: hasDispute ? 'remarque' : functionalStatus,
       notes: hasDispute && disputeReason ? `[LITIGE SIGNALÉ] ${disputeReason} - ${notes.trim()}` : notes.trim(),
-      validatedByOwner: true,
+      validatedByOwner: !isTenantSignaling,
       validatedByTenant: true,
       cautionReleased: shouldReleaseCaution,
     };
@@ -112,7 +115,11 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
           <div className="flex items-center gap-3">
             <div
               className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold shrink-0 ${
-                type === 'check_in' ? 'bg-amber-400 text-slate-950' : 'bg-emerald-500 text-white'
+                type === 'check_in'
+                  ? 'bg-amber-400 text-slate-950'
+                  : isTenantSignaling
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-emerald-500 text-white'
               }`}
             >
               <Camera className="w-5 h-5 stroke-[2.5]" />
@@ -122,16 +129,20 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
                 <h3 className="text-lg font-extrabold text-white">
                   {type === 'check_in'
                     ? "État des Lieux Numérique · Check-in Départ"
+                    : isTenantSignaling
+                    ? "Signaler la restitution du matériel"
                     : "État des Lieux de Restitution · Check-out Retour"}
                 </h3>
                 <span
                   className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                     type === 'check_in'
                       ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30'
+                      : isTenantSignaling
+                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                       : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                   }`}
                 >
-                  Horodaté
+                  {isTenantSignaling ? 'Signalement Locataire' : 'Horodaté'}
                 </span>
               </div>
               <p className="text-xs text-slate-400 truncate max-w-md">
@@ -152,7 +163,11 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
         {isSuccessStep ? (
           <div className="p-8 text-center space-y-6 my-auto">
             <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto ${
-              hasDispute ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'
+              hasDispute
+                ? 'bg-amber-100 text-amber-600'
+                : isTenantSignaling
+                ? 'bg-blue-100 text-blue-600'
+                : 'bg-emerald-100 text-emerald-600'
             }`}>
               <CheckCircle2 className="w-10 h-10" />
             </div>
@@ -161,6 +176,8 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
               <h4 className="text-2xl font-black text-slate-950">
                 {type === 'check_in'
                   ? "État des lieux de départ validé !"
+                  : isTenantSignaling
+                  ? "Restitution signalée avec succès !"
                   : hasDispute
                   ? "Retour enregistré & Litige signalé"
                   : "Restitution conforme & Caution libérée !"}
@@ -168,6 +185,8 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
               <p className="text-xs sm:text-sm text-slate-600">
                 {type === 'check_in'
                   ? `Les photos horodatées sont annexées au contrat. La couverture Matik et l'empreinte de caution de ${cautionAmount} € sont officiellement actives.`
+                  : isTenantSignaling
+                  ? `Votre signalement de restitution et vos photos ont été transmis au loueur. Dès qu'il aura vérifié le matériel et validé la restitution, votre caution Stripe de ${cautionAmount} € sera libérée automatiquement sans aucun débit.`
                   : hasDispute
                   ? `Le dossier de litige a été ouvert avec les photos contradictoires. L'empreinte de caution de ${cautionAmount} € reste sous séquestre Stripe le temps de l'évaluation.`
                   : `L'attestation de restitution a été générée. L'empreinte bancaire Stripe de ${cautionAmount} € a été levée automatiquement sans aucun débit sur le compte du locataire.`}
@@ -218,10 +237,22 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
         ) : (
           <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-6">
             {/* Context Notice */}
-            <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200 text-xs text-amber-900 flex items-start gap-3">
-              <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+            <div className={`p-4 rounded-2xl border text-xs flex items-start gap-3 ${
+              isTenantSignaling
+                ? 'bg-blue-50/80 border-blue-200 text-blue-900'
+                : 'bg-amber-50/80 border-amber-200 text-amber-900'
+            }`}>
+              <ShieldCheck className={`w-4 h-4 shrink-0 mt-0.5 ${isTenantSignaling ? 'text-blue-700' : 'text-amber-700'}`} />
               <div>
-                <strong>Protection juridique zéro contestation :</strong> Prenez 3 photos nettes de l'équipement avec le locataire. Elles font foi en cas de litige et sécurisent la restitution de la caution.
+                {isTenantSignaling ? (
+                  <>
+                    <strong>Signalement de restitution :</strong> Prenez des photos de l'état du matériel lors de la remise. Votre signalement sera transmis au propriétaire pour validation finale et déblocage de votre empreinte de caution.
+                  </>
+                ) : (
+                  <>
+                    <strong>Protection juridique zéro contestation :</strong> Prenez 3 photos nettes de l'équipement avec le locataire. Elles font foi en cas de litige et sécurisent la restitution de la caution.
+                  </>
+                )}
               </div>
             </div>
 
@@ -387,8 +418,8 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
               </div>
             </div>
 
-            {/* Option Signalement de litige (seulement en check-out) */}
-            {type === 'check_out' && (
+            {/* Option Signalement de litige (seulement en check-out par le loueur) */}
+            {type === 'check_out' && !isTenantSignaling && (
               <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-3">
                 <label className="flex items-start gap-3 cursor-pointer select-none">
                   <input
@@ -436,7 +467,15 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
                   required
                 />
                 <span className="text-xs text-slate-700">
-                  <strong>Validation contradictoire en face-à-face :</strong> Le propriétaire et le locataire attestent ensemble de l'exactitude de ces photos et de l'état du matériel à la date et heure d'enregistrement.
+                  {isTenantSignaling ? (
+                    <>
+                      <strong>Attestation de remise du locataire :</strong> J&apos;atteste avoir restitué le matériel dans l&apos;état décrit et photographié ci-dessus, et transmets ce rapport au loueur pour validation contradictoire.
+                    </>
+                  ) : (
+                    <>
+                      <strong>Validation contradictoire en face-à-face :</strong> Le propriétaire et le locataire attestent ensemble de l&apos;exactitude de ces photos et de l&apos;état du matériel à la date et heure d&apos;enregistrement.
+                    </>
+                  )}
                 </span>
               </label>
             </div>
@@ -457,6 +496,8 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
                 className={`px-7 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md ${
                   type === 'check_in'
                     ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-amber-400/20 disabled:opacity-50 disabled:cursor-not-allowed'
+                    : isTenantSignaling
+                    ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed'
                     : 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed'
                 }`}
               >
@@ -464,6 +505,8 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
                 <span>
                   {type === 'check_in'
                     ? "Valider le départ & Activer la caution Stripe"
+                    : isTenantSignaling
+                    ? "Confirmer la restitution & Transmettre au loueur"
                     : hasDispute
                     ? "Valider le retour & Bloquer la caution pour litige"
                     : "Valider le retour & Libérer la caution Stripe"}

@@ -58,8 +58,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   void lang;
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-slate-200/90 bg-white/95 backdrop-blur-md shadow-xs">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 sm:gap-8 px-4 sm:px-6 lg:px-8 h-20">
+    <header className="sticky top-0 z-40 w-full overflow-x-hidden border-b border-slate-200/90 bg-white/95 backdrop-blur-md shadow-xs">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 sm:gap-4 lg:gap-6 px-4 sm:px-6 lg:px-8 h-18 sm:h-20">
         {/* Zone 1: Nouveau Logo Matik Moderne avec icône stylisée et typo Inter */}
         <MatikLogo
           onClick={() => {
@@ -69,8 +69,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           size="md"
         />
 
-        {/* Zone 2: Navigation tabs / multi-page links */}
-        <nav className="hidden md:flex items-center gap-1.5 p-1 bg-slate-100/90 border border-slate-200 rounded-xl">
+        {/* Zone 2: Navigation tabs / multi-page links - basculés en burger sous 1280px (xl) */}
+        <nav className="hidden xl:flex items-center gap-1 p-1 bg-slate-100/90 border border-slate-200 rounded-xl">
           {navLinks.map((tab) => {
             const isActive = currentPage === tab.id;
             const Icon = tab.icon;
@@ -83,7 +83,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   onNavigate(tab.id);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                   isActive
                     ? 'bg-slate-900 text-white shadow-xs font-bold'
                     : 'text-slate-600 hover:text-slate-950 hover:bg-slate-200/70'
@@ -100,69 +100,68 @@ export const Navbar: React.FC<NavbarProps> = ({
         </nav>
 
         {/* Zone 3: Bouton Déposer une annonce + Locale Selector + Connexion / Profil + CTA Réserver */}
-        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-2.5 shrink-0">
           {/* Bouton direct "Déposer une annonce" accessible à tout moment */}
           {onOpenAddEquipment && (
             <button
               type="button"
               onClick={onOpenAddEquipment}
-              className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl text-xs font-bold text-slate-800 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-all cursor-pointer whitespace-nowrap shrink-0 group"
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl text-xs font-bold text-slate-800 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-all cursor-pointer whitespace-nowrap shrink-0 group"
               title="Ajouter un article ou équipement à la location"
             >
               <Plus className="w-3.5 h-3.5 text-amber-600 group-hover:scale-110 transition-transform stroke-[2.5]" />
-              <span className="hidden sm:inline">{t('nav.listItem')}</span>
-              <span className="sm:hidden">+</span>
+              <span className="hidden md:inline">{t('nav.listItem')}</span>
+              <span className="md:hidden">+</span>
             </button>
           )}
 
-          {/* Sélecteur Langue & Devise (desktop) */}
-          <div className="hidden md:block">
+          {/* Sélecteur Langue & Devise (desktop xl+) */}
+          <div className="hidden xl:block">
             <LocaleSelector compact />
           </div>
 
           {/* User auth state */}
           {currentUser ? (
             <div className="flex items-center gap-1.5 sm:gap-2">
-              {/* Bouton direct "Mes Annonces" accessible en 1 clic */}
+              {/* Bouton direct "Mes Annonces" accessible en 1 clic sur très grand écran (2xl) */}
               <button
                 type="button"
                 onClick={() => onNavigate('espace-loueur')}
                 title="Accéder directement à Mes Annonces et au Dashboard"
-                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                className={`hidden 2xl:inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                   currentPage === 'espace-loueur'
                     ? 'bg-amber-400 text-slate-950 font-black shadow-xs ring-1 ring-amber-500'
                     : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200'
                 }`}
               >
                 <Layers className="w-3.5 h-3.5 text-amber-600" />
-                <span className="hidden sm:inline">{t('nav.myAnnouncements')}</span>
-                <span className="sm:hidden">{t('nav.announcements')}</span>
+                <span>{t('nav.myAnnouncements')}</span>
               </button>
 
-              {/* Profil utilisateur */}
+              {/* Profil utilisateur : compact avec max-w-[120px] truncate */}
               <button
                 type="button"
                 onClick={() => onNavigate('espace-loueur')}
                 title="Accéder à votre espace"
-                className="hidden lg:inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-800 transition-colors cursor-pointer"
+                className="hidden md:inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-800 transition-colors cursor-pointer shrink-0"
               >
                 {currentUser.role === 'loueur_pro' ? (
                   <>
-                    <Building2 className="w-3.5 h-3.5 text-amber-600" />
+                    <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                     <span className="max-w-[120px] truncate font-bold">
                       {currentUser.companyName}
                     </span>
                   </>
                 ) : currentUser.role === 'loueur_particulier' ? (
                   <>
-                    <User className="w-3.5 h-3.5 text-emerald-600" />
+                    <User className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                     <span className="max-w-[120px] truncate font-bold">
                       {currentUser.prenom} {currentUser.nom}
                     </span>
                   </>
                 ) : (
                   <>
-                    <User className="w-3.5 h-3.5 text-blue-600" />
+                    <User className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                     <span className="max-w-[120px] truncate font-bold">
                       {currentUser.prenom ? `${currentUser.prenom} ${currentUser.nom || ''}`.trim() : currentUser.name}
                     </span>
@@ -170,15 +169,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
               </button>
 
-              {/* Bouton Déconnexion propre */}
+              {/* Bouton Déconnexion propre qui n'est JAMAIS coupé */}
               <button
                 type="button"
                 onClick={onLogout}
                 title={t('nav.logoutChange')}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-red-50 hover:text-red-600 hover:border-red-200 border border-slate-200 text-xs font-bold text-slate-600 transition-all cursor-pointer group"
+                className="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl bg-slate-100 hover:bg-red-50 hover:text-red-600 hover:border-red-200 border border-slate-200 text-xs font-bold text-slate-600 transition-all cursor-pointer group shrink-0"
               >
-                <LogOut className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
-                <span className="hidden xl:inline">{t('nav.logout')}</span>
+                <LogOut className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5 shrink-0" />
+                <span className="hidden 2xl:inline">{t('nav.logout')}</span>
               </button>
             </div>
           ) : (
@@ -186,7 +185,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               type="button"
               onClick={onOpenAuthModal}
-              className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs font-semibold text-slate-800 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-2 text-xs font-semibold text-slate-800 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Building2 className="w-3.5 h-3.5 text-amber-600" />
               <span className="hidden sm:inline">{t('nav.loginSignup')}</span>
@@ -198,26 +197,27 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             type="button"
             onClick={onOpenBooking}
-            className="inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-950 bg-amber-400 hover:bg-amber-300 active:scale-98 rounded-xl shadow-sm shadow-amber-400/25 hover:shadow-md hover:shadow-amber-400/35 transition-all duration-150 whitespace-nowrap shrink-0 cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-slate-950 bg-amber-400 hover:bg-amber-300 active:scale-98 rounded-xl shadow-xs transition-all duration-150 whitespace-nowrap shrink-0 cursor-pointer"
           >
             <span>{t('nav.book')}</span>
-            <ArrowRight className="w-4 h-4 shrink-0 stroke-[2.5]" />
+            <ArrowRight className="w-3.5 h-3.5 shrink-0 stroke-[2.5]" />
           </button>
 
-          {/* Mobile hamburger menu toggle */}
+          {/* Mobile hamburger menu toggle - visible sous 1280px (xl) */}
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 md:hidden rounded-lg bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-950 cursor-pointer"
+            className="p-2 xl:hidden rounded-lg bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-950 cursor-pointer shrink-0"
+            aria-label="Menu de navigation"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
       </div>
 
-      {/* Mobile dropdown navigation menu */}
+      {/* Mobile / Tablet dropdown navigation menu (< 1280px) */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-b border-slate-200 bg-white px-4 py-3 space-y-2 shadow-lg">
+        <div className="xl:hidden border-b border-slate-200 bg-white px-4 py-3 space-y-2 shadow-lg animate-in fade-in slide-in-from-top-2 duration-150">
           {navLinks.map((tab) => {
             const isActive = currentPage === tab.id;
             const Icon = tab.icon;
@@ -331,6 +331,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span>Connexion / Inscription</span>
               </button>
             )}
+          </div>
+
+          {/* Sélecteur de Langue & Devise sur mobile / tablette */}
+          <div className="pt-2 border-t border-slate-100">
+            <LocaleSelectorMobile />
           </div>
 
           <div className="pt-1">

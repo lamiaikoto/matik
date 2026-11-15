@@ -118,6 +118,7 @@ export interface InspectionReport {
   id: string;
   bookingId: string;
   type: 'check_in' | 'check_out';
+  submittedBy?: 'client' | 'loueur';
   timestamp: string;
   photos: string[];
   cleanliness: 'impeccable' | 'correct' | 'a_nettoyer';
@@ -149,7 +150,8 @@ export interface BookingRecord {
   fraisService?: number;
   totalPrice: number;
   cautionAmount: number;
-  status: 'pending_payment' | 'en_attente_remise' | 'en_cours' | 'restitue';
+  status: 'pending_payment' | 'en_attente_remise' | 'en_cours' | 'restitution_signalee' | 'restitue';
+  restitutionSignaledAt?: string;
   stripeCautionStatus: 'sequestre_sans_debit' | 'caution_liberee' | 'litige_bloque';
   stripeCautionPaymentIntentId?: string;
   stripeCautionSessionId?: string;

@@ -41,6 +41,7 @@ import {
   EyeOff,
   Package,
   AlertTriangle,
+  Clock,
 } from 'lucide-react';
 
 interface LoueurDashboardProps {
@@ -60,7 +61,8 @@ interface LoueurDashboardProps {
   onOpenInspectionModal?: (
     equipment: Equipment | null,
     booking: BookingRecord | null,
-    type: 'check_in' | 'check_out'
+    type: 'check_in' | 'check_out',
+    isTenantSignaling?: boolean
   ) => void;
   onReleaseCaution?: (bookingId: string) => void;
   onDisputeCaution?: (bookingId: string, reason: string) => void;
@@ -1504,6 +1506,8 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                   const isCautionReleased = booking.stripeCautionStatus === 'caution_liberee';
                   const isCompleted = booking.status === 'restitue';
                   const isPendingPayment = booking.status === 'pending_payment';
+                  const isRestitutionSignaled = booking.status === 'restitution_signalee';
+                  const isTenant = currentUser?.role === 'client';
 
                   return (
                     <div
@@ -1581,6 +1585,8 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                                   ? '· Litige (bloquée)'
                                   : booking.cautionRenewalFailed
                                   ? '· Échec renouvellement'
+                                  : isRestitutionSignaled
+                                  ? '· Restitution signalée'
                                   : booking.renewalCount && booking.renewalCount > 0
                                   ? `· Renouvelée (x${booking.renewalCount})`
                                   : '· Sous séquestre'}
@@ -1610,6 +1616,59 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                         </div>
                       )}
 
+                      {/* Alerte Loueur : Restitution signalée par le locataire */}
+                      {isRestitutionSignaled && !isTenant && (
+                        <div className="p-4 rounded-2xl bg-blue-50/90 border border-blue-200 text-blue-950 text-xs flex flex-col md:flex-row md:items-center justify-between gap-3 animate-in fade-in">
+                          <div className="flex items-start gap-3">
+                            <span className="text-xl shrink-0">📦</span>
+                            <div className="space-y-0.5">
+                              <span className="font-extrabold text-blue-900 text-xs sm:text-sm block">
+                                📦 Le locataire a signalé la restitution
+                              </span>
+                              <p className="text-blue-700 leading-relaxed text-[11px] sm:text-xs">
+                                Le locataire a transmis l&apos;état des lieux de retour. Vérifiez les photos et l&apos;état du matériel puis validez pour libérer l&apos;empreinte de caution Stripe de {booking.cautionAmount} €.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {onOpenInspectionModal && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onOpenInspectionModal(
+                                    equipmentList.find((e) => e.id === booking.equipmentId) || null,
+                                    booking,
+                                    'check_out',
+                                    false
+                                  )
+                                }
+                                className="px-3.5 py-2 rounded-xl bg-white hover:bg-blue-100 text-blue-900 border border-blue-300 font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
+                              >
+                                <Camera className="w-3.5 h-3.5 text-blue-600" />
+                                <span>Vérifier le retour</span>
+                              </button>
+                            )}
+                            {onReleaseCaution && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const ok = window.confirm(
+                                    `Confirmer la restitution de "${booking.equipmentName}" et libérer immédiatement l'empreinte de caution Stripe de ${booking.cautionAmount} € ?`
+                                  );
+                                  if (ok) {
+                                    onReleaseCaution(booking.id);
+                                  }
+                                }}
+                                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs flex items-center gap-1.5 cursor-pointer shadow-sm shadow-emerald-600/20"
+                              >
+                                <CheckCircle2 className="w-4 h-4" />
+                                <span>Valider & Libérer caution</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Système de mise en relation directe : Carte de la contrepartie (Appel & WhatsApp 1-clic) */}
                       <CounterpartContactCard
                         counterpartRole={currentUser?.role === 'client' ? 'loueur' : 'locataire'}
@@ -1626,6 +1685,8 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                             className={`w-2 h-2 rounded-full ${
                               isCompleted
                                 ? 'bg-emerald-500'
+                                : isRestitutionSignaled
+                                ? 'bg-blue-500 animate-pulse'
                                 : booking.status === 'en_cours'
                                 ? 'bg-blue-500 animate-pulse'
                                 : isPendingPayment
@@ -1636,6 +1697,10 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                           <span className="font-semibold text-slate-800">
                             {isCompleted
                               ? 'Location terminée · Restitution conforme'
+                              : isRestitutionSignaled
+                              ? (isTenant
+                                ? 'Restitution signalée — en attente de validation loueur'
+                                : '📦 Restitution signalée par le locataire')
                               : booking.status === 'en_cours'
                               ? 'En cours de location'
                               : isPendingPayment
@@ -1653,15 +1718,43 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                             </span>
                           ) : (
                             <>
-                          {/* État des lieux départ */}
-                          {onOpenInspectionModal && !isCompleted && (
+                          {/* En vue LOCATAIRE : Bouton "Signaler la restitution" dès que la location est en cours */}
+                          {isTenant && booking.status === 'en_cours' && onOpenInspectionModal && (
                             <button
                               type="button"
                               onClick={() =>
                                 onOpenInspectionModal(
                                   equipmentList.find((e) => e.id === booking.equipmentId) || null,
                                   booking,
-                                  booking.status === 'en_cours' ? 'check_out' : 'check_in'
+                                  'check_out',
+                                  true
+                                )
+                              }
+                              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs transition-colors flex items-center gap-2 cursor-pointer shadow-sm shadow-blue-600/20"
+                            >
+                              <Package className="w-3.5 h-3.5" />
+                              <span>Signaler la restitution</span>
+                            </button>
+                          )}
+
+                          {/* En vue LOCATAIRE : Statut d'attente quand la restitution est signalée */}
+                          {isTenant && isRestitutionSignaled && (
+                            <span className="px-3.5 py-2 rounded-xl bg-blue-50 text-blue-900 border border-blue-200 font-bold text-xs flex items-center gap-1.5">
+                              <Clock className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                              <span>Restitution signalée · En attente loueur</span>
+                            </span>
+                          )}
+
+                          {/* En vue LOUEUR : État des lieux départ & retour */}
+                          {!isTenant && onOpenInspectionModal && !isCompleted && !isRestitutionSignaled && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onOpenInspectionModal(
+                                  equipmentList.find((e) => e.id === booking.equipmentId) || null,
+                                  booking,
+                                  booking.status === 'en_cours' ? 'check_out' : 'check_in',
+                                  false
                                 )
                               }
                               className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
@@ -1672,6 +1765,25 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                                   ? 'État des lieux retour'
                                   : 'État des lieux départ'}
                               </span>
+                            </button>
+                          )}
+
+                          {/* En vue LOUEUR : Bouton de validation finale si restitution déjà signalée */}
+                          {!isTenant && isRestitutionSignaled && onReleaseCaution && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const ok = window.confirm(
+                                  `Valider la restitution et débloquer la caution Stripe de ${booking.cautionAmount} € pour "${booking.equipmentName}" ?`
+                                );
+                                if (ok) {
+                                  onReleaseCaution(booking.id);
+                                }
+                              }}
+                              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Valider la restitution</span>
                             </button>
                           )}
 
@@ -1688,7 +1800,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                             </span>
                           ) : (
                             /* Option de signalement de litige rapide avant validation */
-                            onDisputeCaution && !isCompleted && (
+                            onDisputeCaution && !isCompleted && !isTenant && (
                               <button
                                 type="button"
                                 onClick={() => {

@@ -466,11 +466,13 @@ export default function App() {
     equipment: Equipment | null;
     booking: BookingRecord | null;
     type: 'check_in' | 'check_out';
+    isTenantSignaling?: boolean;
   }>({
     isOpen: false,
     equipment: null,
     booking: null,
     type: 'check_in',
+    isTenantSignaling: false,
   });
 
   const [lastPayload, setLastPayload] = useState<BookingPayload | null>(null);
@@ -636,21 +638,25 @@ export default function App() {
   const handleOpenInspectionModal = (
     equipment: Equipment | null,
     booking: BookingRecord | null,
-    type: 'check_in' | 'check_out'
+    type: 'check_in' | 'check_out',
+    isTenantSignaling?: boolean
   ) => {
     setInspectionModalData({
       isOpen: true,
       equipment,
       booking,
       type,
+      isTenantSignaling: Boolean(isTenantSignaling),
     });
   };
 
   const handleSaveInspectionReport = (report: InspectionReport, releaseCaution?: boolean) => {
     if (report.bookingId) {
-      // Si c'est un check-out et qu'aucun litige n'est signalé (releaseCaution = true),
-      // déclencher l'annulation automatique du PaymentIntent Stripe de caution
-      if (releaseCaution) {
+      const isTenantSignal = report.submittedBy === 'client' || inspectionModalData.isTenantSignaling;
+
+      // Si c'est un check-out validé par le loueur et qu'aucun litige n'est signalé (releaseCaution = true),
+      // déclencher l'annulation du PaymentIntent Stripe de caution
+      if (releaseCaution && !isTenantSignal) {
         const targetBooking = bookingList.find((b) => b.id === report.bookingId);
         releaseStripeCautionApi({
           bookingId: report.bookingId,
@@ -670,10 +676,22 @@ export default function App() {
       setBookingList((prev) => {
         const updated = prev.map((b) => {
           if (b.id === report.bookingId) {
+            let nextStatus = b.status;
+            if (report.type === 'check_in') {
+              nextStatus = 'en_cours';
+            } else if (report.type === 'check_out') {
+              if (isTenantSignal) {
+                nextStatus = 'restitution_signalee';
+              } else if (releaseCaution) {
+                nextStatus = 'restitue';
+              }
+            }
+
             return {
               ...b,
-              status: releaseCaution ? ('restitue' as const) : ('en_cours' as const),
-              stripeCautionStatus: releaseCaution
+              status: nextStatus,
+              restitutionSignaledAt: isTenantSignal ? report.timestamp : b.restitutionSignaledAt,
+              stripeCautionStatus: (!isTenantSignal && releaseCaution)
                 ? ('caution_liberee' as const)
                 : b.stripeCautionStatus,
               checkInReport: report.type === 'check_in' ? report : b.checkInReport,
@@ -927,7 +945,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col font-sans selection:bg-amber-400 selection:text-slate-950">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#F8FAFC] text-slate-900 flex flex-col font-sans selection:bg-amber-400 selection:text-slate-950">
       {/* Top Navbar with Page Tabs & Espace Loueur Login */}
       <Navbar
         currentPage={currentPage}
@@ -1089,6 +1107,7 @@ export default function App() {
         equipment={inspectionModalData.equipment}
         booking={inspectionModalData.booking}
         type={inspectionModalData.type}
+        isTenantSignaling={inspectionModalData.isTenantSignaling}
         onSaveReport={handleSaveInspectionReport}
         onOpenReview={handleOpenDetails}
       />
