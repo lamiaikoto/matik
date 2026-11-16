@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import bookingHandler from '../../api/booking';
+import connectHandler from '../../api/stripe/connect';
 
 const router = Router();
 
@@ -15,6 +16,14 @@ const router = Router();
  */
 router.post('/booking', (req: Request, res: Response): void => {
   void bookingHandler(req as any, res as any);
+});
+
+/**
+ * ALL /api/stripe/connect
+ * Onboarding et statut Stripe Connect Express
+ */
+router.all('/stripe/connect', (req: Request, res: Response): void => {
+  void connectHandler(req as any, res as any);
 });
 
 /**

@@ -35,6 +35,7 @@ export const mapSupabaseUserToMatikProfile = (user: any): CurrentUser => {
   const fullName = (metadata.full_name || `${prenom} ${nom}`.trim() || email.split('@')[0]) || 'Utilisateur Matik';
   const phone = metadata.phone || user.phone || '';
   const city = metadata.city || 'France';
+  const stripeConnectAccountId = metadata.stripe_connect_account_id || metadata.stripeConnectAccountId || undefined;
 
   if (role === 'loueur_pro') {
     const profile: LoueurProProfile = {
@@ -48,6 +49,7 @@ export const mapSupabaseUserToMatikProfile = (user: any): CurrentUser => {
       email,
       phone,
       city,
+      stripeConnectAccountId,
     };
     return profile;
   }
@@ -62,6 +64,7 @@ export const mapSupabaseUserToMatikProfile = (user: any): CurrentUser => {
       email,
       phone,
       city,
+      stripeConnectAccountId,
     };
     return profile;
   }
@@ -76,6 +79,7 @@ export const mapSupabaseUserToMatikProfile = (user: any): CurrentUser => {
     email,
     phone,
     city,
+    stripeConnectAccountId,
   };
 
   return clientProfile;

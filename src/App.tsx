@@ -477,6 +477,24 @@ export default function App() {
           .finally(() => clearStripeReturnUrl());
       }
 
+      // Traitement du retour Stripe Connect Express
+      const stripeConnectParam = extractUrlParam('stripe_connect');
+      if (stripeConnectParam) {
+        console.log(`🏦 [Stripe Connect Redirect] Statut : ${stripeConnectParam}`);
+        clearStripeReturnUrl();
+        setCurrentPage('espace-loueur');
+        void supabase.auth.getUser().then(({ data }) => {
+          if (data?.user) {
+            const updatedProfile = mapSupabaseUserToMatikProfile(data.user);
+            setCurrentUser(updatedProfile);
+            try {
+              localStorage.setItem('matik_user_session', JSON.stringify(updatedProfile));
+              localStorage.setItem('matik_user', JSON.stringify(updatedProfile));
+            } catch {}
+          }
+        });
+      }
+
       return () => {
         authListener.subscription.unsubscribe();
         unsubscribeRealtime();

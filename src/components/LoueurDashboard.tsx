@@ -42,7 +42,15 @@ import {
   Package,
   AlertTriangle,
   Clock,
+  ExternalLink,
+  Loader2,
 } from 'lucide-react';
+import {
+  getStripeConnectStatus,
+  startStripeConnectOnboarding,
+  getStripeConnectDashboardLink,
+  type StripeConnectStatusResponse,
+} from '../lib/stripeConnect';
 
 interface LoueurDashboardProps {
   currentUser: CurrentUser;
@@ -330,6 +338,62 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
     }
   }, [currentUser]);
 
+  // Stripe Connect Express State
+  const [connectStatus, setConnectStatus] = useState<StripeConnectStatusResponse | null>(null);
+  const [connectLoading, setConnectLoading] = useState<boolean>(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
+
+  const fetchConnectStatus = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const status = await getStripeConnectStatus(currentUser.stripeConnectAccountId);
+      setConnectStatus(status);
+    } catch (err: any) {
+      console.warn('⚠️ [Stripe Connect] Statut non disponible :', err?.message || err);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser?.id) {
+      void fetchConnectStatus();
+    }
+  }, [currentUser?.id, currentUser?.stripeConnectAccountId]);
+
+  const handleStartOnboarding = async () => {
+    setConnectLoading(true);
+    setConnectError(null);
+    try {
+      const businessType = currentUser?.role === 'loueur_pro' ? 'company' : 'individual';
+      const result = await startStripeConnectOnboarding(businessType);
+      if (result.success && result.url) {
+        window.location.href = result.url;
+      } else {
+        setConnectError(result.error || "Impossible d'initier la configuration Stripe Connect.");
+      }
+    } catch (err: any) {
+      setConnectError(err?.message || "Une erreur est survenue lors de la redirection vers Stripe.");
+    } finally {
+      setConnectLoading(false);
+    }
+  };
+
+  const handleOpenDashboard = async () => {
+    setConnectLoading(true);
+    setConnectError(null);
+    try {
+      const result = await getStripeConnectDashboardLink(currentUser?.stripeConnectAccountId);
+      if (result.success && result.url) {
+        window.open(result.url, '_blank', 'noopener,noreferrer');
+      } else {
+        setConnectError(result.error || "Impossible d'accéder au tableau de bord Stripe.");
+      }
+    } catch (err: any) {
+      setConnectError(err?.message || "Erreur lors de l'accès au tableau de bord Stripe.");
+    } finally {
+      setConnectLoading(false);
+    }
+  };
+
   // Validation Rules
   const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const isValidPhone = (phone: string) => phone.replace(/\D/g, '').length >= 10;
@@ -409,6 +473,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
         email: proEmail.trim(),
         phone: proPhone.trim(),
         city: proCity.trim(),
+        stripeConnectAccountId: currentUser?.stripeConnectAccountId,
       };
       onUpdateProfile(updatedUser);
     } else {
@@ -431,6 +496,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
         email: particulierEmail.trim(),
         phone: particulierPhone.trim(),
         city: particulierCity.trim(),
+        stripeConnectAccountId: currentUser?.stripeConnectAccountId,
       };
       onUpdateProfile(updatedUser);
     }
@@ -1022,6 +1088,136 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
               {bookingList.length}
             </div>
             <p className="text-[11px] text-slate-500 font-medium">Suivi en temps réel</p>
+          </div>
+        </div>
+
+        {/* STRIPE CONNECT EXPRESS ONBOARDING & COMMISSION BANNER */}
+        <div className={`p-6 rounded-2xl border transition-all duration-200 shadow-xs ${
+          connectStatus?.chargesEnabled
+            ? 'bg-emerald-50/60 border-emerald-200/80 text-emerald-950'
+            : connectStatus?.hasAccount || currentUser?.stripeConnectAccountId
+            ? 'bg-amber-50/70 border-amber-200/90 text-amber-950'
+            : 'bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-white border-amber-300/80 text-slate-900'
+        }`}>
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+            <div className="flex items-start gap-4 max-w-2xl">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-xs ${
+                connectStatus?.chargesEnabled
+                  ? 'bg-emerald-600 text-white'
+                  : connectStatus?.hasAccount || currentUser?.stripeConnectAccountId
+                  ? 'bg-amber-600 text-white'
+                  : 'bg-amber-500 text-slate-950'
+              }`}>
+                {connectStatus?.chargesEnabled ? (
+                  <CheckCircle2 className="w-6 h-6 text-white" />
+                ) : (
+                  <CreditCard className="w-6 h-6" />
+                )}
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base font-extrabold tracking-tight">
+                    {connectStatus?.chargesEnabled
+                      ? 'Paiements Stripe Connect Express actifs'
+                      : connectStatus?.hasAccount || currentUser?.stripeConnectAccountId
+                      ? 'Finalisation de vos paiements requise (Stripe Express)'
+                      : 'Versements bancaires automatiques (Stripe Connect Express)'}
+                  </h3>
+                  {connectStatus?.chargesEnabled && (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      Compte Express lié
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                  {connectStatus?.chargesEnabled ? (
+                    <>
+                      Votre compte bancaire est connecté. Lors de chaque réservation validée, la commission de <strong className="text-emerald-900">10 % de la plateforme</strong> est automatiquement prélevée et <strong className="text-emerald-900">90 % du montant</strong> est transféré directement sur votre compte Stripe.
+                    </>
+                  ) : connectStatus?.hasAccount || currentUser?.stripeConnectAccountId ? (
+                    <>
+                      Votre compte Express a été créé mais nécessite des informations complémentaires (IBAN, identité) pour autoriser les virements automatiques de vos locations (90 % nets).
+                    </>
+                  ) : (
+                    <>
+                      Liez votre compte bancaire pour recevoir automatiquement vos loyers par virement. La plateforme applique automatiquement la répartition : <strong className="text-slate-950">90 % pour vous</strong> et <strong className="text-slate-950">10 % de commission Matik</strong> lors de la validation d'une réservation.
+                    </>
+                  )}
+                </p>
+                {connectError && (
+                  <div className="flex items-center gap-2 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 p-2 rounded-lg mt-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{connectError}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 shrink-0 w-full sm:w-auto">
+              {connectStatus?.chargesEnabled ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleOpenDashboard}
+                    disabled={connectLoading}
+                    className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white text-emerald-900 border border-emerald-300 font-bold text-xs uppercase tracking-wider hover:bg-emerald-50 transition shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    {connectLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-emerald-700" />
+                    ) : (
+                      <ExternalLink className="w-4 h-4 text-emerald-700" />
+                    )}
+                    <span>Tableau de bord Stripe</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={fetchConnectStatus}
+                    title="Actualiser le statut Stripe"
+                    className="p-2.5 rounded-xl bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-50 transition shadow-xs cursor-pointer"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+                </>
+              ) : connectStatus?.hasAccount || currentUser?.stripeConnectAccountId ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleStartOnboarding}
+                    disabled={connectLoading}
+                    className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs uppercase tracking-wider shadow-sm transition cursor-pointer disabled:opacity-50"
+                  >
+                    {connectLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    ) : (
+                      <CreditCard className="w-4 h-4 text-white" />
+                    )}
+                    <span>Finaliser mon inscription Stripe</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={fetchConnectStatus}
+                    title="Actualiser le statut Stripe"
+                    className="p-3 rounded-xl bg-white border border-amber-300 text-amber-900 hover:bg-amber-50 transition shadow-xs cursor-pointer"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleStartOnboarding}
+                  disabled={connectLoading}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all transform active:scale-95 cursor-pointer disabled:opacity-50"
+                >
+                  {connectLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                  ) : (
+                    <CreditCard className="w-4 h-4 text-slate-950" />
+                  )}
+                  <span>Configurer mes paiements (Stripe Connect)</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

@@ -40,6 +40,7 @@ export interface LoueurProProfile {
   email: string;
   phone: string;
   city?: string;
+  stripeConnectAccountId?: string;
 }
 
 export interface LoueurParticulierProfile {
@@ -51,6 +52,7 @@ export interface LoueurParticulierProfile {
   email: string;
   phone: string;
   city: string;
+  stripeConnectAccountId?: string;
 }
 
 export interface ClientProfile {
@@ -62,6 +64,7 @@ export interface ClientProfile {
   email: string;
   phone: string;
   city?: string;
+  stripeConnectAccountId?: string;
 }
 
 export type CurrentUser = LoueurProProfile | LoueurParticulierProfile | ClientProfile | null;

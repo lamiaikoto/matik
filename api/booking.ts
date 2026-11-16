@@ -1140,7 +1140,23 @@ export default async function handler(req: any, res: any) {
     }
     const appUrl = process.env.APP_URL || fallbackAppUrl;
 
-    const loueurStripeAccountId = String(body.loueurStripeAccountId || '').trim();
+    // Récupération serveur sécurisée du compte Stripe Connect du loueur depuis ses métadonnées Supabase
+    let loueurStripeAccountId: string | undefined;
+    if (equipment.owner_id) {
+      try {
+        const { data: ownerUser } = await admin.auth.admin.getUserById(equipment.owner_id);
+        const connectId = ownerUser?.user?.user_metadata?.stripe_connect_account_id;
+        if (connectId && typeof connectId === 'string' && connectId.startsWith('acct_')) {
+          loueurStripeAccountId = connectId.trim();
+          console.log(`🏦 [Stripe Connect] Compte loueur trouvé en base pour ${equipment.owner_id} : ${loueurStripeAccountId}`);
+        }
+      } catch (err: any) {
+        console.warn('⚠️ [Stripe Connect] Impossible de lire le compte Connect du loueur :', err?.message || err);
+      }
+    }
+    if (!loueurStripeAccountId && typeof body.loueurStripeAccountId === 'string' && body.loueurStripeAccountId.startsWith('acct_')) {
+      loueurStripeAccountId = body.loueurStripeAccountId.trim();
+    }
 
     const stripeData: StripeHoldData = {
       bookingId,
@@ -1154,7 +1170,7 @@ export default async function handler(req: any, res: any) {
       startDate: pricing.startDate,
       endDate: pricing.endDate,
       dureeJours: pricing.days,
-      loueurStripeAccountId: loueurStripeAccountId.startsWith('acct_') ? loueurStripeAccountId : undefined,
+      loueurStripeAccountId: loueurStripeAccountId?.startsWith('acct_') ? loueurStripeAccountId : undefined,
     };
 
     console.log('💳 [Stripe] Initialisation des sessions Stripe (Paiement réel + Caution)...');
