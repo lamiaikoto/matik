@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { CurrentUser, LoueurProProfile, LoueurParticulierProfile, ClientProfile, UserRole } from '../types';
+import { CurrentUser, LoueurProProfile, LoueurParticulierProfile, ClientProfile, UserRole, PageType } from '../types';
 import { supabase, mapSupabaseUserToMatikProfile } from '../lib/supabase';
+import { LEGAL_ENTITY } from '../data/legal';
 import {
   X,
   Building2,
@@ -24,6 +25,7 @@ interface AuthModalProps {
   onClose: () => void;
   onLoginSuccess: (user: CurrentUser) => void;
   defaultRole?: UserRole;
+  onOpenLegal?: (page: PageType) => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -31,6 +33,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   onLoginSuccess,
   defaultRole = 'loueur_pro',
+  onOpenLegal,
 }) => {
   // Navigation entre l'écran social (Google / Apple) et le formulaire courriel
   const [authView, setAuthView] = useState<'social' | 'email'>('social');
@@ -67,6 +70,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   // Initialisation à partir de la session existante si disponible
   useEffect(() => {
@@ -77,6 +81,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setErrorMessage(null);
       setSuccessMessage(null);
       setPassword('');
+      setTermsAccepted(false);
 
       try {
         const saved = localStorage.getItem('matik_user_session') || localStorage.getItem('matik_user');
@@ -111,10 +116,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
+  /** Mémorise l'acceptation des CGU avant une redirection OAuth (Google / Apple). */
+  const persistPendingTermsConsent = () => {
+    try {
+      localStorage.setItem(
+        'matik_terms_pending',
+        JSON.stringify({
+          terms_accepted_at: new Date().toISOString(),
+          terms_version: LEGAL_ENTITY.termsVersion,
+        })
+      );
+    } catch {}
+  };
+
   /**
    * Connexion OAuth réelle avec Google via Supabase Auth
    */
   const handleGoogleSignIn = async () => {
+    if (!termsAccepted) {
+      setErrorMessage('Veuillez accepter les CGU / CGV et la politique de confidentialité pour continuer.');
+      return;
+    }
+
+    persistPendingTermsConsent();
     setIsSubmitting(true);
     setSocialProvider('google');
     setErrorMessage(null);
@@ -134,6 +158,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       if (error) throw error;
     } catch (err: any) {
       console.error('[Supabase Google Auth Error]', err);
+      try {
+        localStorage.removeItem('matik_terms_pending');
+      } catch {}
       setErrorMessage(err.message || 'Impossible de se connecter avec Google. Veuillez réessayer.');
       setIsSubmitting(false);
       setSocialProvider(null);
@@ -144,6 +171,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
    * Connexion OAuth réelle avec Apple via Supabase Auth
    */
   const handleAppleSignIn = async () => {
+    if (!termsAccepted) {
+      setErrorMessage('Veuillez accepter les CGU / CGV et la politique de confidentialité pour continuer.');
+      return;
+    }
+
+    persistPendingTermsConsent();
     setIsSubmitting(true);
     setSocialProvider('apple');
     setErrorMessage(null);
@@ -159,6 +192,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       if (error) throw error;
     } catch (err: any) {
       console.error('[Supabase Apple Auth Error]', err);
+      try {
+        localStorage.removeItem('matik_terms_pending');
+      } catch {}
       setErrorMessage(err.message || 'Impossible de se connecter avec Apple. Veuillez réessayer.');
       setIsSubmitting(false);
       setSocialProvider(null);
@@ -207,6 +243,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     if (!password || password.length < 6) {
       setErrorMessage('Le mot de passe doit contenir au moins 6 caractères.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (emailAuthMode === 'register' && !termsAccepted) {
+      setErrorMessage('Vous devez accepter les CGU / CGV et la politique de confidentialité pour créer un compte.');
       setIsSubmitting(false);
       return;
     }
@@ -281,6 +323,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               city,
               company_name: companyName.trim(),
               siret: siret.replace(/\D/g, ''),
+              terms_accepted_at: new Date().toISOString(),
+              terms_version: LEGAL_ENTITY.termsVersion,
             },
           },
         });
@@ -354,12 +398,44 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           )}
 
+          {/* Consentement CGU obligatoire avant inscription */}
+          <div className="p-3.5 rounded-xl bg-neutral-900 border border-neutral-800 space-y-2">
+            <label className="flex items-start gap-2.5 text-[11px] text-neutral-300 leading-relaxed cursor-pointer">
+              <input
+                type="checkbox"
+                checked={termsAccepted}
+                onChange={(e) => setTermsAccepted(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-neutral-600 bg-neutral-950 text-amber-400 focus:ring-amber-400"
+              />
+              <span>
+                J'ai lu et j'accepte les conditions générales et la politique de confidentialité.
+              </span>
+            </label>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-[26px] text-[11px]">
+              <button
+                type="button"
+                onClick={() => onOpenLegal?.('cgu')}
+                className="text-sky-400 hover:text-sky-300 underline underline-offset-2 font-semibold cursor-pointer"
+              >
+                CGU / CGV
+              </button>
+              <span className="text-neutral-600">·</span>
+              <button
+                type="button"
+                onClick={() => onOpenLegal?.('confidentialite')}
+                className="text-sky-400 hover:text-sky-300 underline underline-offset-2 font-semibold cursor-pointer"
+              >
+                Politique de confidentialité
+              </button>
+            </div>
+          </div>
+
           {/* Boutons d'authentification réelle Google & Apple Supabase */}
           <div className="space-y-3.5">
             {/* Bouton Google OAuth Supabase */}
             <button
               type="button"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !termsAccepted}
               onClick={handleGoogleSignIn}
               className="w-full py-3.5 px-5 rounded-2xl bg-neutral-950 hover:bg-neutral-900 active:scale-[0.99] border border-neutral-700/80 text-white font-semibold text-sm transition-all duration-150 flex items-center justify-center gap-3 cursor-pointer shadow-sm disabled:opacity-50"
             >
@@ -391,7 +467,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {/* Bouton Apple OAuth Supabase */}
             <button
               type="button"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !termsAccepted}
               onClick={handleAppleSignIn}
               className="w-full py-3.5 px-5 rounded-2xl bg-neutral-950 hover:bg-neutral-900 active:scale-[0.99] border border-neutral-700/80 text-white font-semibold text-sm transition-all duration-150 flex items-center justify-center gap-3 cursor-pointer shadow-sm disabled:opacity-50"
             >
@@ -426,8 +502,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <div className="pt-2 border-t border-neutral-900 text-center">
             <p className="text-[11px] text-neutral-400 leading-relaxed max-w-xs mx-auto">
               En vous inscrivant, vous acceptez nos{' '}
-              <span className="text-neutral-200 underline underline-offset-2">conditions d'utilisation</span> et notre{' '}
-              <span className="text-neutral-200 underline underline-offset-2">politique de confidentialité</span>.
+              <button
+                type="button"
+                onClick={() => onOpenLegal?.('cgu')}
+                className="text-neutral-200 underline underline-offset-2 hover:text-white cursor-pointer"
+              >
+                conditions générales
+              </button>{' '}
+              et notre{' '}
+              <button
+                type="button"
+                onClick={() => onOpenLegal?.('confidentialite')}
+                className="text-neutral-200 underline underline-offset-2 hover:text-white cursor-pointer"
+              >
+                politique de confidentialité
+              </button>
+              .
             </p>
           </div>
         </div>
@@ -830,10 +920,46 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
             </div>
 
+            {emailAuthMode === 'register' && (
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                <label className="flex items-start gap-2.5 text-xs text-slate-700 leading-relaxed cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={termsAccepted}
+                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-amber-500 focus:ring-amber-400"
+                  />
+                  <span>
+                    J'ai lu et j'accepte les conditions générales et la politique de confidentialité.
+                  </span>
+                </label>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-[26px] text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => onOpenLegal?.('cgu')}
+                    className="text-amber-700 hover:text-amber-800 underline underline-offset-2 font-semibold cursor-pointer"
+                  >
+                    CGU / CGV
+                  </button>
+                  <span className="text-slate-400">·</span>
+                  <button
+                    type="button"
+                    onClick={() => onOpenLegal?.('confidentialite')}
+                    className="text-amber-700 hover:text-amber-800 underline underline-offset-2 font-semibold cursor-pointer"
+                  >
+                    Politique de confidentialité
+                  </button>
+                </div>
+                <p className="pl-[26px] text-[10px] text-slate-500">
+                  La date et la version acceptées sont enregistrées avec votre compte.
+                </p>
+              </div>
+            )}
+
             <div className="pt-2">
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || (emailAuthMode === 'register' && !termsAccepted)}
                 className="w-full py-3.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider text-slate-950 bg-amber-400 hover:bg-amber-300 active:scale-98 transition-all shadow-md shadow-amber-400/20 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60"
               >
                 {isSubmitting ? (

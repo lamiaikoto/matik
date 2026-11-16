@@ -44,7 +44,7 @@ export const mapSupabaseUserToMatikProfile = (user: any): CurrentUser => {
       prenom: prenom || fullName,
       nom: nom,
       companyName: metadata.company_name || metadata.companyName || fullName,
-      siret: metadata.siret || '89123456700012',
+      siret: metadata.siret || '',
       email,
       phone,
       city,

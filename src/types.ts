@@ -64,7 +64,14 @@ export interface ClientProfile {
 
 export type CurrentUser = LoueurProProfile | LoueurParticulierProfile | ClientProfile | null;
 
-export type PageType = 'accueil' | 'catalogue' | 'espace-loueur' | 'garanties';
+export type PageType =
+  | 'accueil'
+  | 'catalogue'
+  | 'espace-loueur'
+  | 'garanties'
+  | 'mentions-legales'
+  | 'cgu'
+  | 'confidentialite';
 
 export interface BookingFormData {
   clientPrenom: string;

@@ -15,6 +15,7 @@ import { ConfirmationModal } from './components/ConfirmationModal';
 import { EquipmentEditorModal } from './components/EquipmentEditorModal';
 import { LoueurDashboard } from './components/LoueurDashboard';
 import { GarantiesPage } from './components/GarantiesPage';
+import { LegalPage } from './components/LegalPage';
 import { AuthModal } from './components/AuthModal';
 import { AppDownloadBanner } from './components/AppDownloadBanner';
 import { PWAInstallModal } from './components/PWAInstallModal';
@@ -400,6 +401,35 @@ export default function App() {
         console.info('[Supabase Auth Event]', event);
         if (session?.user) {
           const profile = mapSupabaseUserToMatikProfile(session.user);
+
+          // Si l'utilisateur revient d'un OAuth après avoir accepté les CGU,
+          // on enregistre la preuve de consentement dans ses métadonnées.
+          if (!session.user.user_metadata?.terms_accepted_at) {
+            try {
+              const pendingRaw = localStorage.getItem('matik_terms_pending');
+              if (pendingRaw) {
+                const pending = JSON.parse(pendingRaw);
+                const acceptedAt = Date.parse(pending.terms_accepted_at || '');
+                const isFresh =
+                  Number.isFinite(acceptedAt) && Date.now() - acceptedAt < 30 * 60 * 1000;
+
+                if (isFresh) {
+                  void supabase.auth
+                    .updateUser({
+                      data: {
+                        terms_accepted_at: pending.terms_accepted_at,
+                        terms_version: pending.terms_version,
+                      },
+                    })
+                    .then(() => localStorage.removeItem('matik_terms_pending'))
+                    .catch(() => {});
+                } else {
+                  localStorage.removeItem('matik_terms_pending');
+                }
+              }
+            } catch {}
+          }
+
           setCurrentUser(profile);
           loadEquipmentsData(profile);
           try {
@@ -1094,6 +1124,19 @@ export default function App() {
             currentUser={currentUser}
           />
         )}
+
+        {/* PAGES LÉGALES (Mentions légales, CGU / CGV, Confidentialité) */}
+        {(currentPage === 'mentions-legales' ||
+          currentPage === 'cgu' ||
+          currentPage === 'confidentialite') && (
+          <LegalPage
+            page={currentPage}
+            onBack={() => {
+              setCurrentPage('accueil');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          />
+        )}
       </main>
 
       {/* Quiet Footer with multi-page links */}
@@ -1145,6 +1188,11 @@ export default function App() {
         onClose={() => setIsAuthModalOpen(false)}
         onLoginSuccess={handleLoginSuccess}
         defaultRole="loueur_pro"
+        onOpenLegal={(page) => {
+          setIsAuthModalOpen(false);
+          setCurrentPage(page);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
       />
 
       {/* Confirmation Modal */}

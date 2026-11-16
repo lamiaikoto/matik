@@ -44,19 +44,19 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
         <div className="text-center max-w-3xl mx-auto space-y-4">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <span>Sécurité Juridique & Bancaire Matik</span>
+            <span>Sécurité & Transparence Matik</span>
           </div>
 
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-950 tracking-tight leading-tight">
             Garanties, Caution Stripe & <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-600 via-amber-700 to-amber-800">
-              Contrats Numériques Conformes
+              Contrats Numériques Horodatés
             </span>
           </h1>
 
           <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl mx-auto">
-            Louer du matériel professionnel et particulier exige une confiance absolue.
-            Découvrez nos mécanismes technologiques et juridiques conçus pour sécuriser chaque transaction sans avance de trésorerie inutile.
+            Louer du matériel professionnel ou particulier suppose des règles claires.
+            Découvrez les mécanismes techniques et contractuels mis en place pour sécuriser chaque transaction.
           </p>
         </div>
 
@@ -74,11 +74,11 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
             <ul className="text-xs text-slate-600 space-y-2 pt-2 border-t border-slate-100">
               <li className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Fixée librement par le propriétaire du matériel</span>
+                <span>Montant fixé librement par le propriétaire du matériel</span>
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Protocole 3D Secure v2 & chiffrement bancaire certifié</span>
+                <span>Pré-autorisation traitée par Stripe (3D Secure selon la banque)</span>
               </li>
             </ul>
           </div>
@@ -87,19 +87,19 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
             <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center">
               <FileText className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-bold text-slate-950">02. Contrat Conforme sous 30s</h3>
+            <h3 className="text-lg font-bold text-slate-950">02. Contrat Numérique Horodaté</h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Dès la validation de votre réservation, un contrat complet certifié conforme au droit français
-              est généré et adressé aux deux parties par e-mail avec signature électronique.
+              Dès la validation de votre réservation, un contrat type régi par le droit français
+              est généré et adressé aux deux parties par e-mail. La date de validation est enregistrée avec la réservation.
             </p>
             <ul className="text-xs text-slate-600 space-y-2 pt-2 border-t border-slate-100">
               <li className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Articles 1714 et suivants du Code civil</span>
+                <span>Articles 1713 et suivants du Code civil</span>
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Horodatage cryptographique certifié eIDAS</span>
+                <span>Horodatage du contrat au moment de la validation</span>
               </li>
             </ul>
           </div>
@@ -110,8 +110,8 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
             </div>
             <h3 className="text-lg font-bold text-slate-950">03. Restitution & Levée d'Empreinte</h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Le retour s'effectue avec un état des lieux contradictoire rapide.
-              La caution bancaire sous séquestre est automatiquement débloquée sous 24h sans frais.
+              Le retour s'effectue avec un état des lieux contradictoire.
+              L'empreinte bancaire est libérée par le loueur après validation du retour, sans frais de plateforme.
             </p>
             <ul className="text-xs text-slate-600 space-y-2 pt-2 border-t border-slate-100">
               <li className="flex items-center gap-2">
@@ -120,7 +120,7 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Levée immédiate de l'autorisation bancaire</span>
+                <span>Levée de l'empreinte déclenchée par le loueur après contrôle</span>
               </li>
             </ul>
           </div>
@@ -136,8 +136,8 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
               Comment fonctionne concrètement l'empreinte bancaire Stripe ?
             </h2>
             <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-              Contrairement aux dépôts de garantie classiques encaissés puis remboursés plusieurs semaines après avec perte de trésorerie,
-              Matik utilise l'API de capture différée (Payment Intent Hold) de Stripe.
+              Contrairement aux dépôts de garantie classiques encaissés puis remboursés plusieurs semaines après,
+              Matik s'appuie sur l'autorisation bancaire de Stripe : le montant est réservé sur la carte, sans être capturé.
             </p>
           </div>
 
@@ -160,9 +160,9 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
               </div>
               <div className="font-bold text-slate-950 text-sm">Réservation de caution</div>
               <p className="text-slate-600 text-[11px] leading-relaxed">
-                La banque de l'emprunteur garantit la solvabilité pour le montant fixé par le loueur (ex: 300 €, 500 € ou 1 500 €).
+                Une empreinte bancaire est posée sur la carte du locataire pour le montant fixé par le loueur (ex: 300 €, 500 € ou 1 500 €).
               </p>
-              <div className="text-[11px] text-amber-700 font-bold">Statut : Séquestre sans débit</div>
+              <div className="text-[11px] text-amber-700 font-bold">Statut : Pré-autorisation sans débit</div>
             </div>
 
             <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
@@ -171,7 +171,7 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
               </div>
               <div className="font-bold text-slate-950 text-sm">Chantier & Utilisation</div>
               <p className="text-slate-600 text-[11px] leading-relaxed">
-                Le locataire travaille en toute sérénité. Le matériel est couvert par l'assurance casse & vol tous risques.
+                Le locataire utilise le matériel conformément aux consignes du loueur. Chaque partie vérifie ses propres assurances.
               </p>
               <div className="text-[11px] text-blue-700 font-bold">Période de location active</div>
             </div>
@@ -182,9 +182,9 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
               </div>
               <div className="font-bold text-slate-950 text-sm">Restitution & Levée</div>
               <p className="text-slate-600 text-[11px] leading-relaxed">
-                Dès la confirmation du retour en bon état, l'autorisation Stripe expire automatiquement.
+                Après l'état des lieux contradictoire, le loueur libère l'empreinte bancaire depuis son espace.
               </p>
-              <div className="text-[11px] text-emerald-700 font-bold">Déblocage total sous 24h</div>
+              <div className="text-[11px] text-emerald-700 font-bold">Libération après validation du retour</div>
             </div>
           </div>
         </div>
@@ -195,13 +195,13 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
             <div className="space-y-1">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
                 <FileCheck className="w-3.5 h-3.5 text-amber-600" />
-                <span>Cadre Juridique Conforme</span>
+                <span>Cadre Juridique</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">
                 Modèle type de contrat de location & cautionnement
               </h2>
               <p className="text-xs sm:text-sm text-slate-500">
-                Spécimen officiel conforme aux articles 1713 et suivants du Code civil français.
+                Modèle indicatif régi par les articles 1713 et suivants du Code civil français.
               </p>
             </div>
 
@@ -237,7 +237,7 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 gap-2">
               <div className="space-y-0.5">
                 <div className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">
-                  RÉPUBLIQUE FRANÇAISE · CONVENTION DE MISE À DISPOSITION & DE SÉQUESTRE
+                  RÉPUBLIQUE FRANÇAISE · CONVENTION DE MISE À DISPOSITION & DE CAUTION
                 </div>
                 <div className="text-xs text-slate-500 font-medium">
                   Document officiel dématérialisé édité par la plateforme Matik
@@ -292,7 +292,7 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
                       [Numéro SIRET si Professionnel ou Pièce d'identité vérifiée si Particulier]
                     </div>
                     <div className="text-[11px] text-slate-500">
-                      [Adresse du dépôt / Atelier de retrait] · [Email certifié & Téléphone]
+                      [Adresse du dépôt / Atelier de retrait] · [E-mail de contact & Téléphone]
                     </div>
                   </div>
                 )}
@@ -313,7 +313,7 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
                     [Statut : Particulier ou Entreprise cliente avec contact habilité]
                   </div>
                   <div className="text-[11px] text-slate-500">
-                    [Email certifié de notification] · [Téléphone mobile vérifié pour SMS 3DS]
+                    [E-mail de notification] · [Téléphone mobile vérifié pour SMS 3DS]
                   </div>
                 </div>
               </div>
@@ -328,7 +328,7 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
                 <p className="text-slate-600 leading-relaxed text-xs">
                   Le Loueur met à disposition du Locataire l'équipement référencé :{' '}
                   <span className="font-semibold text-slate-800 italic">[Désignation précise, marque, modèle, n° de série et accessoires inventoriés]</span>.
-                  Un contrôle contradictoire de départ atteste du bon état de marche, de propreté et de la conformité aux normes CE en vigueur.
+                  Un contrôle contradictoire de départ atteste du bon état de marche, de propreté et de la présence des accessoires inventoriés.
                 </p>
               </div>
 
@@ -339,7 +339,7 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
                 <p className="text-slate-600 leading-relaxed text-xs">
                   Le Locataire souscrit une pré-autorisation bancaire obligatoire d'un montant de{' '}
                   <span className="font-semibold text-amber-700 italic">[Montant de la caution fixé par le loueur en euros]</span>{' '}
-                  auprès de l'opérateur de paiement certifié Stripe. Aucun débit effectif n'est opéré sur le compte bancaire du Locataire.
+                  auprès de l'opérateur de paiement Stripe. Aucun débit effectif n'est opéré sur le compte bancaire du Locataire.
                   Cette garantie sert exclusivement de gage en cas de détérioration constatée lors du retour ou de non-restitution du matériel.
                 </p>
               </div>
@@ -350,8 +350,8 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
                 </div>
                 <p className="text-slate-600 leading-relaxed text-xs">
                   À l'échéance de la période de location convenue (<span className="italic font-semibold text-slate-800">[Date de début au Date de restitution]</span>),
-                  le matériel est restitué au lieu convenu. Dès la validation de la restitution en bon état, l'empreinte bancaire
-                  est levée de plein droit sous un délai maximal de 24 heures.
+                  le matériel est restitué au lieu convenu. Après l'état des lieux contradictoire de retour, le loueur
+                  libère l'empreinte bancaire depuis son espace.
                 </p>
               </div>
             </div>
@@ -360,10 +360,10 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
             <div className="pt-2 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="p-3.5 rounded-xl bg-white border border-slate-200 text-xs space-y-1">
                 <div className="text-slate-500 font-semibold text-[11px]">Pour le Loueur :</div>
-                <div className="text-slate-900 font-bold">Signature électronique certifiée</div>
+                <div className="text-slate-900 font-bold">Validation numérique horodatée</div>
                 <div className="text-[10px] text-emerald-700 flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                  <span>Horodaté cryptographiquement eIDAS</span>
+                  <span>Date et heure enregistrées avec la réservation</span>
                 </div>
               </div>
 
@@ -389,7 +389,7 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
               Comment se déroule la fin de location ?
             </h2>
             <p className="text-xs sm:text-sm text-slate-600">
-              Une procédure transparente et numérisée en moins de 3 minutes chez le loueur partenaire ou particulier.
+              Une procédure transparente et numérisée chez le loueur partenaire ou particulier.
             </p>
           </div>
 
@@ -418,9 +418,9 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
               <div className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center font-extrabold text-sm shadow-xs">
                 C
               </div>
-              <h4 className="font-bold text-slate-950 text-sm">Libération de caution instantanée</h4>
+              <h4 className="font-bold text-slate-950 text-sm">Libération de la caution par le loueur</h4>
               <p className="text-slate-600 leading-relaxed text-xs">
-                Validation conjointe sur le terminal : l'empreinte bancaire de caution est immédiatement clôturée sans aucun prélèvement.
+                Après validation du retour, le loueur libère l'empreinte bancaire de caution depuis son espace, sans prélèvement si aucun dommage n'est constaté.
               </p>
             </div>
           </div>
@@ -433,7 +433,7 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
               Prêt à louer en toute sérénité ?
             </h3>
             <p className="text-xs sm:text-sm font-medium text-slate-900 max-w-xl">
-              Choisissez votre matériel parmi les équipements révisés et disponibles immédiatement avec caution Stripe sécurisée.
+              Choisissez votre matériel parmi les équipements disponibles immédiatement avec caution Stripe sécurisée.
             </p>
           </div>
 
@@ -457,7 +457,7 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
             <div className="flex items-center justify-between pb-4 border-b border-slate-200">
               <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-amber-600" />
-                <h3 className="text-lg font-bold text-slate-950">Spécimen Officiel de Contrat Matik</h3>
+                <h3 className="text-lg font-bold text-slate-950">Modèle de contrat Matik</h3>
               </div>
               <div className="flex items-center gap-3">
                 <button
@@ -482,10 +482,10 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
             <div className="space-y-4 text-xs text-slate-700 leading-relaxed font-sans">
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center space-y-1">
                 <div className="font-bold text-slate-950 uppercase text-xs">
-                  CONTRAT TYPE DE MISE À DISPOSITION DE MATÉRIEL ET CONVENTION DE SÉQUESTRE
+                  CONTRAT TYPE DE MISE À DISPOSITION DE MATÉRIEL ET CONVENTION DE CAUTION
                 </div>
                 <div className="text-[11px] text-slate-500">
-                  Régie par les articles 1713 à 1778 du Code civil français · Édition standard certifiée Matik
+                  Régie par les articles 1713 à 1778 du Code civil français · Édition standard Matik
                 </div>
               </div>
 
@@ -494,19 +494,19 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
                   <strong className="text-slate-950">ARTICLE 1 · PARTIES CONTRACTANTES :</strong> Le contrat est conclu entre le Loueur, personne physique ou morale désignée, et le Locataire signataire, après validation de son identité et acceptation des présentes conditions générales.
                 </p>
                 <p>
-                  <strong className="text-slate-950">ARTICLE 2 · OBJET DU PRÊT / MISE À DISPOSITION :</strong> Le Loueur met à disposition temporaire un équipement conforme aux normes de sécurité, en bon état de marche, nettoyé et muni de ses accessoires. Un contrôle contradictoire est réalisé lors de la prise en charge.
+                  <strong className="text-slate-950">ARTICLE 2 · OBJET DU PRÊT / MISE À DISPOSITION :</strong> Le Loueur met à disposition temporaire un équipement en bon état de marche, nettoyé et muni de ses accessoires. Un contrôle contradictoire est réalisé lors de la prise en charge.
                 </p>
                 <p>
-                  <strong className="text-slate-950">ARTICLE 3 · CAUTION BANCAIRE SÉCURISÉE (STRIPE HOLD) :</strong> Pour chaque location, une garantie financière sous forme d'empreinte bancaire préalable est requise. Le montant est fixé obligatoirement par le loueur lors de la création de l'annonce. Aucun montant n'est débité du compte du locataire au moment de la signature.
+                  <strong className="text-slate-950">ARTICLE 3 · CAUTION BANCAIRE (STRIPE) :</strong> Pour chaque location, une garantie sous forme d'empreinte bancaire préalable est requise. Le montant est fixé obligatoirement par le loueur lors de la création de l'annonce. Aucun montant n'est débité du compte du locataire au moment de la validation.
                 </p>
                 <p>
-                  <strong className="text-slate-950">ARTICLE 4 · COUVERTURE ASSURANCE & VOL :</strong> Tout matériel loué via la plateforme bénéficie de la couverture responsabilité et casse accidentelle sous réserve du respect des consignes normales d'utilisation du fabricant.
+                  <strong className="text-slate-950">ARTICLE 4 · RESPONSABILITÉ & ASSURANCES :</strong> Matik n'est pas assureur. Le Loueur et le Locataire déclarent disposer des assurances nécessaires pour le matériel et son usage, et demeurent responsables de leurs obligations respectives.
                 </p>
                 <p>
-                  <strong className="text-slate-950">ARTICLE 5 · RESTITUTION & LEVÉE DE GARANTIE :</strong> À la date fixée de restitution, un examen visuel conjointe est opéré. La clôture de l'empreinte bancaire est automatique et libère la réservation de fonds sous 24h ouvrées.
+                  <strong className="text-slate-950">ARTICLE 5 · RESTITUTION & LEVÉE DE GARANTIE :</strong> À la date fixée de restitution, un examen visuel contradictoire est opéré. Le loueur libère ensuite l'empreinte bancaire depuis son espace, après validation du retour.
                 </p>
                 <p>
-                  <strong className="text-slate-950">ARTICLE 6 · DROIT APPLICABLE & SIGNATURE ÉLECTRONIQUE :</strong> Le présent contrat est régi par la législation française. La signature numérique a valeur probante équivalente à une signature manuscrite conformément au règlement eIDAS n° 910/2014.
+                  <strong className="text-slate-950">ARTICLE 6 · DROIT APPLICABLE & VALIDATION ÉLECTRONIQUE :</strong> Le présent contrat est régi par la législation française. La validation du contrat par voie électronique et son horodatage sont enregistrés avec la réservation.
                 </p>
               </div>
             </div>

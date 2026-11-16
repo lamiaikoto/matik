@@ -10,9 +10,9 @@ export const Footer: React.FC<{
   return (
     <footer className="bg-white border-t border-slate-200 text-slate-600 text-xs">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 pb-12 border-b border-slate-200">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8 pb-12 border-b border-slate-200">
           {/* Brand Info */}
-          <div className="space-y-4 md:col-span-1">
+          <div className="space-y-4 sm:col-span-2 lg:col-span-1">
             <MatikLogo
               size="sm"
               onClick={() => {
@@ -96,10 +96,53 @@ export const Footer: React.FC<{
           <div className="space-y-3">
             <h5 className="font-semibold text-slate-950 uppercase tracking-wider text-[11px]">Engagements</h5>
             <ul className="space-y-2">
-              <li><span className="text-slate-600">Contrat dématérialisé sous 30s</span></li>
+              <li><span className="text-slate-600">Contrat numérique horodaté</span></li>
               <li><span className="text-slate-600">Empreinte Stripe sans débit immédiat</span></li>
-              <li><span className="text-slate-600">Assurance casse et vol incluse</span></li>
-              <li><span className="text-slate-600">Parc vérifié & certifié CE</span></li>
+              <li><span className="text-slate-600">État des lieux photo contradictoire</span></li>
+              <li><span className="text-slate-600">Loueurs et locataires identifiés</span></li>
+            </ul>
+          </div>
+
+          {/* Legal */}
+          <div className="space-y-3">
+            <h5 className="font-semibold text-slate-950 uppercase tracking-wider text-[11px]">Légal</h5>
+            <ul className="space-y-2">
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onNavigate?.('mentions-legales');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="hover:text-slate-950 transition-colors cursor-pointer text-left"
+                >
+                  Mentions légales
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onNavigate?.('cgu');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="hover:text-slate-950 transition-colors cursor-pointer text-left"
+                >
+                  CGU / CGV
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onNavigate?.('confidentialite');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="hover:text-slate-950 transition-colors cursor-pointer text-left"
+                >
+                  Politique de confidentialité
+                </button>
+              </li>
             </ul>
           </div>
 
@@ -131,7 +174,7 @@ export const Footer: React.FC<{
           <div className="flex items-center gap-4">
             <span className="text-slate-600">Paiement & Empreinte sécurisés par Stripe</span>
             <span>·</span>
-            <span className="text-slate-600">Signature électronique certifiée</span>
+            <span className="text-slate-600">Contrat numérique horodaté</span>
           </div>
         </div>
       </div>

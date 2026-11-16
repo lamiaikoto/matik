@@ -95,20 +95,20 @@ export const Hero: React.FC<HeroProps> = ({
             </div>
           </div>
 
-          {/* Colonne de droite (5 cols) : Visuel d'illustration avec badge Parc vérifié */}
+          {/* Colonne de droite (5 cols) : Visuel d'illustration avec badge état des lieux */}
           <div className="lg:col-span-5">
             <div className="relative rounded-2xl overflow-hidden border border-slate-200/90 bg-white shadow-xl shadow-slate-200/60 group">
-              {/* Badge "Parc vérifié" */}
+              {/* Badge "État des lieux photo" */}
               <div className="absolute top-4 left-4 z-20 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/95 backdrop-blur-md border border-emerald-500/40 text-slate-900 shadow-lg">
                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600">
                   <ShieldCheck className="w-4 h-4 stroke-[2.5]" />
                 </div>
                 <div>
                   <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                    Parc vérifié
+                    État des lieux photo
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   </div>
-                  <div className="text-[10px] text-slate-500">Équipements contrôlés & certifiés</div>
+                  <div className="text-[10px] text-slate-500">Contradictoire départ & retour</div>
                 </div>
               </div>
 
@@ -130,7 +130,7 @@ export const Hero: React.FC<HeroProps> = ({
                     <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
                     <span className="font-semibold text-white">BTP · High-Tech · Maison · Véhicules · Tout se loue</span>
                   </div>
-                  <span className="text-amber-400 text-xs font-bold">100% assuré</span>
+                  <span className="text-amber-400 text-xs font-bold">Empreinte Stripe</span>
                 </div>
               </div>
             </div>
