@@ -25,6 +25,7 @@ import { DigitalInspectionModal } from './components/DigitalInspectionModal';
 import { EquipmentDetails } from './components/EquipmentDetails';
 import { Footer } from './components/Footer';
 import { EQUIPMENT_LIST } from './data/equipment';
+import { CatalogFilters, EMPTY_CATALOG_FILTERS } from './data/catalogFilters';
 import { supabase, mapSupabaseUserToMatikProfile } from './lib/supabase';
 import {
   fetchEquipmentsFromSupabase,
@@ -58,6 +59,8 @@ import {
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<PageType>('accueil');
+  // Filtres partagés entre la recherche de l'accueil et le catalogue (état unique)
+  const [catalogFilters, setCatalogFilters] = useState<CatalogFilters>(EMPTY_CATALOG_FILTERS);
   const [currentUser, setCurrentUser] = useState<CurrentUser>(null);
   const [equipmentList, setEquipmentList] = useState<Equipment[]>(() => {
     // Initialisation optimiste immédiate à partir du cache local
@@ -345,6 +348,18 @@ export default function App() {
     }
 
     setCurrentPage('accueil');
+  };
+
+  /**
+   * Recherche lancée depuis l'accueil : applique les filtres puis ouvre le catalogue
+   * et fait défiler jusqu'à la section des résultats.
+   */
+  const handleSearchFromHome = (filters: CatalogFilters) => {
+    setCatalogFilters(filters);
+    setCurrentPage('catalogue');
+    window.setTimeout(() => {
+      document.getElementById('catalogue')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
   };
 
   // Charge les données sauvegardées ou réinitialise les données de test préchargées
@@ -1010,6 +1025,8 @@ export default function App() {
               }}
               onOpenBooking={handleOpenBooking}
               onAddNewEquipment={handleAddNewEquipment}
+              onSearch={handleSearchFromHome}
+              initialFilters={catalogFilters}
             />
 
             {/* INNOVATION 3: Simulateur de Gains & Rentabilité Interactif */}
@@ -1022,6 +1039,8 @@ export default function App() {
               selectedEquipmentId={selectedEquipment?.id || ''}
               bookingList={bookingList}
               isLoading={isEquipmentsLoading}
+              filters={catalogFilters}
+              onFiltersChange={setCatalogFilters}
               onSelectEquipment={handleSelectEquipment}
               onAddNewEquipment={handleAddNewEquipment}
               onOpenPassportModal={handleOpenPassportModal}
@@ -1059,6 +1078,8 @@ export default function App() {
               selectedEquipmentId={selectedEquipment?.id || ''}
               bookingList={bookingList}
               isLoading={isEquipmentsLoading}
+              filters={catalogFilters}
+              onFiltersChange={setCatalogFilters}
               onSelectEquipment={handleSelectEquipment}
               onAddNewEquipment={handleAddNewEquipment}
               onOpenPassportModal={handleOpenPassportModal}

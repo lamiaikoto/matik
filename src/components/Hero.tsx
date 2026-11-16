@@ -1,19 +1,38 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowDown, ArrowRight, ShieldCheck, Plus } from 'lucide-react';
 import heroUniversalImage from '../assets/images/hero_equipment_universal_1793131513238.jpg';
+import { EQUIPMENT_CATEGORIES } from '../data/equipment';
+import { CatalogFilters, EMPTY_CATALOG_FILTERS } from '../data/catalogFilters';
+import { SearchFilterBar } from './SearchFilterBar';
 
 interface HeroProps {
   onExploreCatalog: () => void;
   onOpenBooking: () => void;
   onNavigateLoueur?: () => void;
   onAddNewEquipment?: () => void;
+  onSearch?: (filters: CatalogFilters) => void;
+  initialFilters?: CatalogFilters;
 }
 
 export const Hero: React.FC<HeroProps> = ({
   onExploreCatalog,
   onOpenBooking,
   onAddNewEquipment,
+  onSearch,
+  initialFilters,
 }) => {
+  const [searchFilters, setSearchFilters] = useState<CatalogFilters>(
+    initialFilters ?? EMPTY_CATALOG_FILTERS
+  );
+
+  // Garde la barre de l'accueil synchronisée avec les filtres partagés du catalogue
+  // (pastilles, réinitialisation ou recherche lancée depuis le catalogue).
+  useEffect(() => {
+    if (initialFilters) {
+      setSearchFilters(initialFilters);
+    }
+  }, [initialFilters]);
+
   return (
     <section className="relative overflow-hidden pt-8 pb-16 lg:pt-14 lg:pb-22 border-b border-slate-200/80 bg-gradient-to-b from-white via-[#F8FAFC] to-slate-100/50">
       {/* Background ambient warm lighting */}
@@ -93,6 +112,23 @@ export const Hero: React.FC<HeroProps> = ({
                 <ArrowDown className="w-4 h-4 text-amber-500" />
               </button>
             </div>
+
+            {/* Recherche multicritères directe depuis l'accueil */}
+            {onSearch && (
+              <div className="pt-2 max-w-2xl">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                  Rechercher un équipement
+                </div>
+                <SearchFilterBar
+                  filters={searchFilters}
+                  onChange={setSearchFilters}
+                  categories={EQUIPMENT_CATEGORIES}
+                  onSubmit={() => onSearch(searchFilters)}
+                  submitLabel="Rechercher"
+                  variant="hero"
+                />
+              </div>
+            )}
           </div>
 
           {/* Colonne de droite (5 cols) : Visuel d'illustration avec badge état des lieux */}
