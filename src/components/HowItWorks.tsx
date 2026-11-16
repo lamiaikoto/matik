@@ -6,13 +6,13 @@ export const HowItWorks: React.FC<{ onStartBooking: () => void }> = ({ onStartBo
     {
       num: '01',
       title: 'Sélectionnez votre matériel',
-      desc: 'Parcourez notre catalogue d’équipements professionnels BTP, découpe, béton et outillage lourd révisés.',
+      desc: 'Parcourez notre catalogue d’équipements professionnels BTP, découpe, béton et outillage lourd disponibles.',
       icon: Search,
     },
     {
       num: '02',
-      title: 'Contrat certifié en 30 sec',
-      desc: 'Renseignez vos dates et coordonnées. Notre plateforme génère instantanément votre contrat de location légal et conforme.',
+      title: 'Contrat numérique horodaté',
+      desc: 'Renseignez vos dates et coordonnées. Notre plateforme génère instantanément un contrat de location numérique, horodaté avec votre réservation.',
       icon: FileCheck2,
     },
     {
@@ -23,8 +23,8 @@ export const HowItWorks: React.FC<{ onStartBooking: () => void }> = ({ onStartBo
     },
     {
       num: '04',
-      title: 'Retrait immédiat chez l’artisan',
-      desc: 'Récupérez l’équipement testé et prêt à l’emploi auprès de votre artisan partenaire ou dépôt le plus proche.',
+      title: 'Retrait chez le loueur',
+      desc: 'Récupérez l’équipement auprès de votre loueur partenaire ou au dépôt le plus proche, après l’état des lieux de départ.',
       icon: Wrench,
     },
   ];

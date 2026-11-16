@@ -10,7 +10,7 @@ export const StripeCautionSection: React.FC = () => {
           <div className="lg:col-span-7 space-y-6">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
               <Lock className="w-3.5 h-3.5" />
-              <span>Empreinte Bancaire Stripe Sécurisée</span>
+              <span>Empreinte bancaire Stripe</span>
             </div>
 
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-950 tracking-tight">
@@ -20,7 +20,7 @@ export const StripeCautionSection: React.FC = () => {
 
             <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
               Chaque loueur fixe une empreinte de caution proportionnée à la valeur de l’équipement (ex : 300 € pour une scie, 500 € pour un marteau-piqueur, 1500 € pour une mini-pelle).
-              Nous utilisons le mécanisme officiel d'autorisation préalable de Stripe : 0 € prélevé.
+              Nous utilisons le mécanisme d'autorisation préalable de Stripe : 0 € prélevé.
             </p>
 
             <div className="space-y-4 pt-2">
@@ -29,7 +29,7 @@ export const StripeCautionSection: React.FC = () => {
                   <ShieldCheck className="w-4 h-4" />
                 </div>
                 <div className="space-y-1">
-                  <h4 className="text-sm font-bold text-slate-950">0 € débité lors de la signature</h4>
+                  <h4 className="text-sm font-bold text-slate-950">0 € débité à la réservation</h4>
                   <p className="text-xs text-slate-600 leading-relaxed">
                     Une simple réservation de fonds est opérée par votre banque pendant la durée du chantier.
                   </p>
@@ -41,9 +41,9 @@ export const StripeCautionSection: React.FC = () => {
                   <RefreshCcw className="w-4 h-4" />
                 </div>
                 <div className="space-y-1">
-                  <h4 className="text-sm font-bold text-slate-950">Relâchement automatique à la restitution</h4>
+                  <h4 className="text-sm font-bold text-slate-950">Levée après l'état des lieux de retour</h4>
                   <p className="text-xs text-slate-600 leading-relaxed">
-                    Dès l'état des lieux de retour validé avec le point de dépôt, l’empreinte bancaire est instantanément levée.
+                    Après l'état des lieux de retour validé avec le loueur, l'empreinte bancaire est levée depuis son espace.
                   </p>
                 </div>
               </div>
@@ -53,9 +53,9 @@ export const StripeCautionSection: React.FC = () => {
                   <Lock className="w-4 h-4" />
                 </div>
                 <div className="space-y-1">
-                  <h4 className="text-sm font-bold text-slate-950">Sécurité bancaire maximale Stripe</h4>
+                  <h4 className="text-sm font-bold text-slate-950">Paiement traité par Stripe</h4>
                   <p className="text-xs text-slate-600 leading-relaxed">
-                    Conforme aux normes européennes DSP2, chiffrement AES-256 et validation biométrique 3D Secure v2 sur votre mobile.
+                    Les paiements et empreintes sont traités par Stripe ; l'authentification 3D Secure dépend de votre banque.
                   </p>
                 </div>
               </div>
@@ -71,7 +71,7 @@ export const StripeCautionSection: React.FC = () => {
                   <span className="font-bold text-slate-950 text-sm">Aperçu autorisation Stripe</span>
                 </div>
                 <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                  Prêt pour signature
+                  Prêt à valider
                 </span>
               </div>
 
@@ -94,8 +94,8 @@ export const StripeCautionSection: React.FC = () => {
                 </div>
 
                 <div className="pt-2 border-t border-slate-700 flex items-center justify-between text-[11px] text-slate-300">
-                  <span>Protocole DSP2 / 3DS</span>
-                  <span className="text-emerald-300 font-medium">Levée automatique sous 24h</span>
+                  <span>Protocole 3D Secure selon la banque</span>
+                  <span className="text-emerald-300 font-medium">Levée après retour validé</span>
                 </div>
               </div>
 

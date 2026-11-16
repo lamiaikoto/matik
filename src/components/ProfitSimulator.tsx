@@ -122,7 +122,7 @@ export const ProfitSimulator: React.FC<ProfitSimulatorProps> = ({ onStartDepot }
             Combien peut vous rapporter le matériel qui dort chez vous ?
           </h2>
           <p className="text-sm sm:text-base text-slate-600">
-            Sélectionnez votre type d'équipement ou ajustez le curseur pour estimer vos revenus passifs réels, 100% protégés par la caution Stripe sans débit.
+            Sélectionnez votre type d'équipement ou ajustez le curseur pour estimer vos revenus locatifs, avec une empreinte de caution Stripe sans débit immédiat.
           </p>
         </div>
 
@@ -286,7 +286,7 @@ export const ProfitSimulator: React.FC<ProfitSimulatorProps> = ({ onStartDepot }
                 <div className="flex items-start gap-2.5 text-xs text-slate-300">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                   <span>
-                    <strong>Contrat numérique certifié :</strong> Horodatage juridique et état des lieux photo inclus.
+                    <strong>Contrat numérique horodaté :</strong> date et heure enregistrées avec la réservation, état des lieux photo inclus.
                   </span>
                 </div>
                 <div className="flex items-start gap-2.5 text-xs text-slate-300">

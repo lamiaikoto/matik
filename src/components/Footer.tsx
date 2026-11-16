@@ -21,7 +21,7 @@ export const Footer: React.FC<{
               }}
             />
             <p className="text-slate-600 text-xs leading-relaxed">
-              Plateforme moderne de location d'outillage, équipements high-tech, événementiel et véhicules pour artisans, particuliers et entreprises.
+              Plateforme de mise en relation entre particuliers et professionnels pour la location de matériel. Matikilou agit en qualité d'intermédiaire technique.
             </p>
             {onOpenInstallModal && (
               <div className="pt-1">

@@ -146,7 +146,7 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-400 truncate max-w-md">
-                {equipName} · Caution sous séquestre Stripe : {cautionAmount} €
+                {equipName} · Empreinte de caution Stripe : {cautionAmount} €
               </p>
             </div>
           </div>
@@ -184,17 +184,17 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
               </h4>
               <p className="text-xs sm:text-sm text-slate-600">
                 {type === 'check_in'
-                  ? `Les photos horodatées sont annexées au contrat. La couverture Matik et l'empreinte de caution de ${cautionAmount} € sont officiellement actives.`
+                  ? `Les photos horodatées sont annexées au contrat. L'empreinte de caution Stripe de ${cautionAmount} € est active pour la durée de la location.`
                   : isTenantSignaling
-                  ? `Votre signalement de restitution et vos photos ont été transmis au loueur. Dès qu'il aura vérifié le matériel et validé la restitution, votre caution Stripe de ${cautionAmount} € sera libérée automatiquement sans aucun débit.`
+                  ? `Votre signalement de restitution et vos photos ont été transmis au loueur. Dès qu'il aura vérifié le matériel et validé la restitution, votre caution Stripe de ${cautionAmount} € sera libérée par le loueur, sans débit si aucun dommage n'est constaté.`
                   : hasDispute
-                  ? `Le dossier de litige a été ouvert avec les photos contradictoires. L'empreinte de caution de ${cautionAmount} € reste sous séquestre Stripe le temps de l'évaluation.`
-                  : `L'attestation de restitution a été générée. L'empreinte bancaire Stripe de ${cautionAmount} € a été levée automatiquement sans aucun débit sur le compte du locataire.`}
+                  ? `Le dossier de litige a été ouvert avec les photos contradictoires. L'empreinte de caution de ${cautionAmount} € reste bloquée sur Stripe le temps de l'évaluation.`
+                  : `L'attestation de restitution a été générée. L'empreinte bancaire Stripe de ${cautionAmount} € a été levée sans débit sur le compte du locataire.`}
               </p>
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600 max-w-md mx-auto flex items-center justify-between">
-              <span className="font-semibold text-slate-900">Horodatage officiel :</span>
+              <span className="font-semibold text-slate-900">Date et heure :</span>
               <span className="font-mono text-slate-500">{new Date().toLocaleString('fr-FR')}</span>
             </div>
 
@@ -433,7 +433,7 @@ export const DigitalInspectionModal: React.FC<DigitalInspectionModalProps> = ({
                       Signaler un dommage / litige (bloquer la caution)
                     </span>
                     <span className="text-[11px] text-amber-800 leading-relaxed block mt-0.5">
-                      Cochez cette case si le matériel présente une dégradation anormale ou une non-conformité. La caution de {cautionAmount} € ne sera pas libérée et restera sous séquestre pour instruction.
+                      Cochez cette case si le matériel présente une dégradation anormale ou une non-conformité. La caution de {cautionAmount} € ne sera pas libérée et restera bloquée sur l'empreinte Stripe pour instruction.
                     </span>
                   </div>
                 </label>

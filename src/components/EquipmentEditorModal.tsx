@@ -442,7 +442,7 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-500">
-                Fixez votre tarif journalier et le montant obligatoire de la caution sous séquestre Stripe.
+                Fixez votre tarif journalier et le montant obligatoire de l'empreinte de caution Stripe.
               </p>
             </div>
           </div>

@@ -472,7 +472,7 @@ export const Catalog: React.FC<CatalogProps> = ({
                           type="button"
                           onClick={() => onOpenPassportModal(item)}
                           className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-950 transition-colors cursor-pointer shrink-0"
-                          title="Voir le Passeport QR Code officiel & état des lieux"
+                          title="Voir le Passeport QR Code & état des lieux"
                         >
                           <QrCode className="w-4 h-4 text-slate-700" />
                         </button>

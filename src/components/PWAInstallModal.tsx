@@ -117,10 +117,10 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
                 <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
                   <div className="flex items-center gap-2 font-bold text-slate-900">
                     <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                    <span>Sécurisé & Garanti</span>
+                    <span>Sécurisé</span>
                   </div>
                   <p className="text-slate-600 text-[11px] leading-relaxed">
-                    Chiffrement bancaire Stripe certifié et conformité contractuelle automatique.
+                    Paiements et empreintes traités par Stripe ; contrat numérique horodaté.
                   </p>
                 </div>
               </div>
@@ -137,7 +137,7 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
                     <span>Installer l'application sur cet appareil</span>
                   </button>
                   <p className="text-[11px] text-center text-slate-500">
-                    Installation certifiée PWA · Aucun téléchargement lourd · Moins de 2 Mo
+                    Installation PWA · Aucun téléchargement lourd · Moins de 2 Mo
                   </p>
                 </div>
               ) : isIOS ? (

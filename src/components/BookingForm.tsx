@@ -310,7 +310,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
             Réservez votre équipement en 3 clics
           </h2>
           <p className="text-sm sm:text-base text-slate-600">
-            Contrat généré immédiatement, envoi direct par e-mail et empreinte de caution Stripe 100% sécurisée.
+            Contrat généré immédiatement, envoi direct par e-mail et empreinte de caution Stripe sans débit immédiat.
           </p>
         </div>
 
@@ -326,7 +326,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
               <div className="text-right">
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  Contrat & caution certifiés
+                  Contrat horodaté & empreinte Stripe
                 </span>
               </div>
             </div>
@@ -587,7 +587,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                   ) : isSubmitting ? (
                     <>
                       <div className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                      <span>Génération du contrat et sécurisation Stripe en cours...</span>
+                      <span>Génération du contrat et empreinte Stripe en cours...</span>
                     </>
                   ) : (
                     <>
@@ -597,7 +597,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                   )}
                 </button>
                 <p className="mt-2 text-center text-xs text-slate-500">
-                  En validant, votre contrat de location certifié et votre lien d'empreinte Stripe sont générés instantanément.
+                  En validant, votre contrat de location horodaté et votre lien d'empreinte Stripe sont générés instantanément.
                 </p>
               </div>
             </form>
@@ -673,13 +673,13 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                 </div>
 
                 <div className="flex justify-between items-center text-slate-700 text-xs">
-                  <span>Assurance casse & vol professionnelle</span>
-                  <span className="font-mono text-emerald-700 font-bold">Incluse (0 €)</span>
+                  <span>État des lieux photo contradictoire</span>
+                  <span className="font-mono text-emerald-700 font-bold">Inclus</span>
                 </div>
 
                 <div className="flex justify-between items-center text-slate-700 text-xs">
-                  <span>Édition automatique du contrat & signature</span>
-                  <span className="font-mono text-emerald-700 font-bold">Offerte</span>
+                  <span>Contrat numérique horodaté</span>
+                  <span className="font-mono text-emerald-700 font-bold">Offert</span>
                 </div>
 
                 {/* Total final à payer */}
@@ -708,7 +708,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                   </div>
                   <p className="text-[11px] text-slate-600 leading-relaxed">
                     Caution Stripe non débitée : <strong className="text-slate-950 font-mono">{montantCaution} €</strong>.
-                    Simple empreinte bancaire sécurisée sans aucun prélèvement sur votre compte, automatiquement relâchée lors de la restitution.
+                    Simple empreinte bancaire sans prélèvement immédiat sur votre compte, levée par le loueur après l'état des lieux de retour.
                   </p>
                 </div>
               </div>
@@ -716,7 +716,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
               {/* Safety bullet reassurance */}
               <div className="pt-2 border-t border-slate-200 flex items-center gap-3 text-xs text-slate-600">
                 <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
-                <span>Paiement sécurisé par protocole 3D Secure v2 & chiffrement bancaire Stripe.</span>
+                <span>Paiement et empreinte traités par Stripe ; authentification 3D Secure selon votre banque.</span>
               </div>
             </div>
           </div>

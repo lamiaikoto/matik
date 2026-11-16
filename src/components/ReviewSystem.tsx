@@ -351,7 +351,7 @@ export const ReviewSystem: React.FC<ReviewSystemProps> = ({
           </div>
           <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full shrink-0 flex items-center gap-1.5">
             <Lock className="w-3 h-3 text-emerald-600" />
-            <span>Avis Locataire Certifié</span>
+            <span>Avis Locataire Vérifié</span>
           </span>
         </div>
 
@@ -497,7 +497,7 @@ export const ReviewSystem: React.FC<ReviewSystemProps> = ({
                 </span>
               </label>
               <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md shrink-0 hidden sm:inline-block">
-                Certifié 0 € prélevé
+                Empreinte Stripe · 0 € prélevé
               </span>
             </div>
 
@@ -515,7 +515,7 @@ export const ReviewSystem: React.FC<ReviewSystemProps> = ({
                 className="px-6 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-950 text-xs font-extrabold uppercase tracking-wider shadow-sm transition-all flex items-center gap-2 cursor-pointer disabled:cursor-not-allowed"
               >
                 {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 stroke-[2.5]" />}
-                <span>{isSubmitting ? 'Publication…' : 'Publier mon avis certifié'}</span>
+                <span>{isSubmitting ? 'Publication…' : 'Publier mon avis'}</span>
               </button>
             </div>
           </form>

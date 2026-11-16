@@ -229,11 +229,11 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                   </div>
                   <div className="flex justify-between items-baseline">
                     <span className="text-slate-600 font-medium">Protocole de sécurité :</span>
-                    <span className="text-slate-800 font-mono font-medium">Stripe Hold API & 3D Secure v2</span>
+                    <span className="text-slate-800 font-mono font-medium">Pré-autorisation Stripe</span>
                   </div>
                   <div className="flex justify-between items-baseline">
                     <span className="text-slate-600 font-medium">Restitution de l'empreinte :</span>
-                    <span className="text-slate-800 font-medium">Automatique sous 24h après le retour</span>
+                    <span className="text-slate-800 font-medium">Après état des lieux de retour</span>
                   </div>
                 </div>
 
@@ -272,7 +272,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                 <div className="flex items-center justify-between pb-3 border-b border-slate-200">
                   <div className="flex items-center gap-2">
                     <FileText className="w-5 h-5 text-amber-600" />
-                    <span className="font-bold text-slate-950 text-sm">Récépissé Officiel de Réservation</span>
+                    <span className="font-bold text-slate-950 text-sm">Récépissé de Réservation</span>
                   </div>
                   <button
                     type="button"

@@ -240,7 +240,7 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
                   RÉPUBLIQUE FRANÇAISE · CONVENTION DE MISE À DISPOSITION & DE CAUTION
                 </div>
                 <div className="text-xs text-slate-500 font-medium">
-                  Document officiel dématérialisé édité par la plateforme Matik
+                  Document dématérialisé édité par la plateforme Matik
                 </div>
               </div>
               <div className="text-right">

@@ -145,7 +145,7 @@ export const EquipmentDetails: React.FC<EquipmentDetailsProps> = ({
                   <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200/90 text-xs text-amber-900 flex items-start gap-2.5">
                     <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
                     <div>
-                      <strong>Protection Matik 100% sans débit :</strong> L'empreinte de caution Stripe ({equipment.depositAmount} €) ne bloque ni ne débite vos fonds.
+                      <strong>Empreinte Stripe sans débit immédiat :</strong> L'empreinte de caution Stripe ({equipment.depositAmount} €) est une pré-autorisation, sans prélèvement au moment de la réservation.
                     </div>
                   </div>
                 </div>
@@ -177,7 +177,7 @@ export const EquipmentDetails: React.FC<EquipmentDetailsProps> = ({
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-500">
-                        Caution Stripe non débitée : simple empreinte bancaire libérée automatiquement à la restitution conforme. Frais de service & garantie Matik (10%) appliqués à la commande.
+                        Caution Stripe non débitée : simple empreinte bancaire levée par le loueur après état des lieux de retour. Frais de service & garantie Matik (10%) appliqués à la commande.
                       </p>
                     </div>
 
@@ -202,7 +202,7 @@ export const EquipmentDetails: React.FC<EquipmentDetailsProps> = ({
                       )}
                       <div className="flex justify-between py-1">
                         <span>État des lieux</span>
-                        <strong className="text-emerald-700">Photos certifiées incluses</strong>
+                        <strong className="text-emerald-700">Photos contradictoires incluses</strong>
                       </div>
                     </div>
                   </div>

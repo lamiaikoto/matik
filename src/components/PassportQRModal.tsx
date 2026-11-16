@@ -79,7 +79,7 @@ export const PassportQRModal: React.FC<PassportQRModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Identifiant certifié : <span className="font-mono text-amber-400 font-bold">{passportCode}</span>
+                Identifiant unique : <span className="font-mono text-amber-400 font-bold">{passportCode}</span>
               </p>
             </div>
           </div>

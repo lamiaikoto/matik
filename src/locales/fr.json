@@ -95,9 +95,9 @@
     "simulatorFull": "Simuler la rentabilité de mon matériel",
     "activeListings": "Annonces actives en ligne",
     "readyForBooking": "Prêts pour réservation immédiate",
-    "stripeCautions": "Cautions sous séquestre Stripe",
-    "certifiedContracts": "Contrats certifiés conformes",
-    "restitutionRate": "Taux restitution sans incident"
+    "stripeCautions": "Empreintes de caution Stripe",
+    "certifiedContracts": "Contrats horodatés",
+    "restitutionRate": "Réservations suivies"
   },
   "auth": {
     "login": "Connexion",

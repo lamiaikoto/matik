@@ -29,7 +29,7 @@ export const AppDownloadBanner: React.FC<AppDownloadBannerProps> = ({ onOpenInst
 
             <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
               Installez l'application en un clic sur votre smartphone ou votre ordinateur.
-              Générez vos contrats certifiés, gérez vos cautions Stripe sans débit et suivez vos réservations en temps réel, même sur chantier ou à l'atelier sans connexion.
+              Générez vos contrats numériques horodatés, gérez vos empreintes Stripe sans débit et suivez vos réservations en temps réel, même sur chantier ou à l'atelier sans connexion.
             </p>
 
             {/* Feature Checklist */}
@@ -44,11 +44,11 @@ export const AppDownloadBanner: React.FC<AppDownloadBannerProps> = ({ onOpenInst
               </div>
               <div className="flex items-center gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Contrats accessibles 100% hors-ligne</span>
+                <span>Contrats consultables hors-ligne</span>
               </div>
               <div className="flex items-center gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Aucun intermédiaire, mise à jour auto</span>
+                <span>Mise à jour automatique</span>
               </div>
             </div>
 
@@ -95,14 +95,14 @@ export const AppDownloadBanner: React.FC<AppDownloadBannerProps> = ({ onOpenInst
                   <div className="text-xs font-bold text-white">Pack Enceintes & Caisson JBL</div>
                   <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-700 text-slate-300">
                     <span>Caution Stripe</span>
-                    <span className="text-emerald-400 font-mono font-bold">500 € sous séquestre</span>
+                    <span className="text-emerald-400 font-mono font-bold">500 € pré-autorisés</span>
                   </div>
                 </div>
 
                 {/* Card 2: Quick action */}
                 <div className="p-3.5 rounded-xl bg-amber-400 text-slate-950 space-y-1">
-                  <div className="text-[11px] font-bold uppercase tracking-wide">Contrat certifié</div>
-                  <div className="text-xs font-black">Prêt pour signature numérique</div>
+                  <div className="text-[11px] font-bold uppercase tracking-wide">Contrat numérique</div>
+                  <div className="text-xs font-black">Horodaté et prêt à valider</div>
                   <div className="text-[10px] text-slate-800">Empreinte bancaire validée sans débit</div>
                 </div>
 

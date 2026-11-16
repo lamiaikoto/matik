@@ -96,8 +96,8 @@
     "activeListings": "Active listings online",
     "readyForBooking": "Ready for immediate booking",
     "stripeCautions": "Deposits held by Stripe",
-    "certifiedContracts": "Certified compliant contracts",
-    "restitutionRate": "Incident-free return rate"
+    "certifiedContracts": "Timestamped contracts",
+    "restitutionRate": "Tracked bookings"
   },
   "auth": {
     "login": "Login",

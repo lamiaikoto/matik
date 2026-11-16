@@ -493,7 +493,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                   Gestionnaire de Profil Loueur
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-500 max-w-xl">
-                  Basculez entre le mode Professionnel et Particulier. Vos données certifiées seront automatiquement renseignées sur vos contrats de location légaux et vos cautions Stripe.
+                  Basculez entre le mode Professionnel et Particulier. Vos coordonnées seront automatiquement reprises sur vos contrats de location numériques et vos empreintes Stripe.
                 </p>
               </div>
 
@@ -733,7 +733,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                   <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-start gap-3">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
-                      <strong className="font-bold">Espace Particulier Simplifié :</strong> Aucun numéro SIRET requis. Vous bénéficiez des mêmes protections juridiques : caution Stripe garantie 0 € débité et modèle de contrat certifié.
+                      <strong className="font-bold">Espace Particulier Simplifié :</strong> Aucun numéro SIRET requis. Vous bénéficiez des mêmes outils : empreinte Stripe sans débit immédiat et contrat de location numérique horodaté.
                     </div>
                   </div>
 
@@ -840,7 +840,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                 </div>
 
                 <div className="text-[11px] text-slate-500 font-semibold shrink-0">
-                  {profileRole === 'loueur_pro' && proSiret ? `SIRET : ${proSiret}` : 'Particulier certifié'}
+                  {profileRole === 'loueur_pro' && proSiret ? `SIRET : ${proSiret}` : 'Particulier'}
                 </div>
               </div>
 
@@ -1001,27 +1001,27 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
           </div>
 
           <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs space-y-1">
-            <div className="text-xs text-slate-500 font-medium">Cautions sous séquestre Stripe</div>
+            <div className="text-xs text-slate-500 font-medium">Empreintes de caution Stripe</div>
             <div className="text-2xl sm:text-3xl font-extrabold text-amber-700 tabular-nums">
               {totalCautionManaged} €
             </div>
-            <p className="text-[11px] text-slate-500 font-medium">Empreintes CB garanties 0 € débit</p>
+            <p className="text-[11px] text-slate-500 font-medium">Pré-autorisations sans débit immédiat</p>
           </div>
 
           <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs space-y-1">
-            <div className="text-xs text-slate-500 font-medium">Contrats certifiés conformes</div>
+            <div className="text-xs text-slate-500 font-medium">Contrats horodatés</div>
             <div className="text-2xl sm:text-3xl font-extrabold text-slate-950 tabular-nums">
               100%
             </div>
-            <p className="text-[11px] text-blue-700 font-semibold">Génération numérique instantanée</p>
+            <p className="text-[11px] text-blue-700 font-semibold">Date et heure enregistrées</p>
           </div>
 
           <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs space-y-1">
-            <div className="text-xs text-slate-500 font-medium">Taux restitution sans incident</div>
+            <div className="text-xs text-slate-500 font-medium">Réservations suivies</div>
             <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 tabular-nums">
-              99.8%
+              {bookingList.length}
             </div>
-            <p className="text-[11px] text-slate-500 font-medium">Couverture casse & vol incluse</p>
+            <p className="text-[11px] text-slate-500 font-medium">Suivi en temps réel</p>
           </div>
         </div>
 
@@ -1276,7 +1276,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                                 type="button"
                                 onClick={() => onOpenPassportModal(item)}
                                 className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
-                                title="Voir & Imprimer le Passeport QR Code officiel"
+                                title="Voir & Imprimer le Passeport QR Code"
                               >
                                 <QrCode className="w-3.5 h-3.5 text-slate-700" />
                               </button>
@@ -1589,7 +1589,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                                   ? '· Restitution signalée'
                                   : booking.renewalCount && booking.renewalCount > 0
                                   ? `· Renouvelée (x${booking.renewalCount})`
-                                  : '· Sous séquestre'}
+                                  : '· Empreinte Stripe'}
                               </span>
                             </span>
                           </div>
@@ -1810,7 +1810,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                                   }
                                 }}
                                 className="px-3 py-2 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 font-bold transition-colors flex items-center gap-1 cursor-pointer"
-                                title="Signaler un dommage et retenir la caution sous séquestre"
+                                title="Signaler un dommage et retenir la caution"
                               >
                                 <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
                                 <span>Signaler un litige</span>
