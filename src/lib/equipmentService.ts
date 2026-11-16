@@ -12,6 +12,9 @@ import { Equipment } from '../types';
  * - image_url: TEXT (URL de l'image principale de l'équipement)
  * - owner_id: UUID (Identifiant de l'utilisateur propriétaire dans auth.users)
  * - is_published: BOOLEAN (True = visible publiquement dans le catalogue)
+ * - city: TEXT (Ville de retrait — colonne optionnelle, migration 03)
+ * - region: TEXT (Région française — colonne optionnelle, migration 03)
+ * - postal_code: TEXT (Code postal — colonne optionnelle, migration 03)
  * - created_at: TIMESTAMPTZ (Date de création de l'annonce)
  */
 export interface SupabaseEquipmentRow {
@@ -24,11 +27,16 @@ export interface SupabaseEquipmentRow {
   image_url: string;
   owner_id: string;
   is_published: boolean;
+  city?: string | null;
+  region?: string | null;
+  postal_code?: string | null;
   created_at: string;
 }
 
 interface EquipmentMetadata {
   city?: string;
+  postalCode?: string;
+  region?: string;
   specs?: { label: string; value: string }[];
   partnerArtisan?: string;
   condition?: 'neuf' | 'tres_bon_etat' | 'bon_etat';
@@ -115,7 +123,9 @@ export const mapSupabaseRowToEquipment = (row: SupabaseEquipmentRow): Equipment 
     image: row.image_url || '',
     description: cleanDescription || 'Équipement vérifié et garanti avec caution sécurisée Stripe sans débit.',
     partnerArtisan: metadata.partnerArtisan || metadata.ownerName || 'Loueur Partenaire Matik',
-    city: metadata.city || 'France',
+    city: row.city || metadata.city || 'France',
+    postalCode: row.postal_code || metadata.postalCode || '',
+    region: row.region || metadata.region || '',
     condition: metadata.condition || 'tres_bon_etat',
     tags: metadata.tags || [],
     specs: Array.isArray(metadata.specs) ? metadata.specs : [],
@@ -213,9 +223,11 @@ export const saveEquipmentToSupabase = async (
       ? equipment.is_published
       : equipment.isActive !== false;
 
-    // 4. Encapsulation des métadonnées
+    // 4. Encapsulation des métadonnées (dont la localisation, conservée en secours)
     const metadata: EquipmentMetadata = {
       city: equipment.city || 'France',
+      postalCode: equipment.postalCode || '',
+      region: equipment.region || '',
       partnerArtisan: equipment.partnerArtisan,
       specs: equipment.specs || [],
       condition: equipment.condition,
@@ -228,7 +240,7 @@ export const saveEquipmentToSupabase = async (
 
     const finalDescription = encodeDescriptionWithMetadata(equipment.description, metadata);
 
-    const payload = {
+    const basePayload = {
       id: finalId,
       title: equipment.name.trim(),
       description: finalDescription,
@@ -241,11 +253,36 @@ export const saveEquipmentToSupabase = async (
       created_at: equipment.createdAt || new Date().toISOString(),
     };
 
-    const { data, error } = await supabase
+    const locationPayload = {
+      city: equipment.city?.trim() || null,
+      region: equipment.region?.trim() || null,
+      postal_code: equipment.postalCode?.trim() || null,
+    };
+
+    let { data, error } = await supabase
       .from('equipments')
-      .upsert(payload, { onConflict: 'id' })
+      .upsert({ ...basePayload, ...locationPayload }, { onConflict: 'id' })
       .select()
       .single();
+
+    // Les colonnes de localisation peuvent ne pas encore exister (migration 03 non exécutée).
+    // On réessaie alors sans elles : ville, région et code postal restent enregistrés
+    // dans les métadonnées de la description, donc aucune donnée n'est perdue.
+    if (
+      error &&
+      (error.code === '42703' ||
+        error.code === 'PGRST204' ||
+        /column .* does not exist/i.test(error.message || ''))
+    ) {
+      console.warn(
+        '[Supabase equipments] Colonnes de localisation absentes — exécutez supabase/migrations/03_add_location_fields.sql. Enregistrement via métadonnées.'
+      );
+      ({ data, error } = await supabase
+        .from('equipments')
+        .upsert(basePayload, { onConflict: 'id' })
+        .select()
+        .single());
+    }
 
     if (error) {
       console.error('[Supabase equipments] Erreur insertion/mise à jour:', error);

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Equipment, CurrentUser } from '../types';
 import { EQUIPMENT_CATEGORIES } from '../data/equipment';
+import { FRENCH_REGIONS } from '../data/regions';
 import { generateUUID, isValidUUID } from '../lib/equipmentService';
 import {
   X,
@@ -187,6 +188,8 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
   const [customCategoryName, setCustomCategoryName] = useState('');
   const [categorySearchQuery, setCategorySearchQuery] = useState('');
   const [city, setCity] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [region, setRegion] = useState('');
   const [dailyRate, setDailyRate] = useState<number | ''>('');
   const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [ownerType, setOwnerType] = useState<'pro' | 'particulier'>('particulier');
@@ -222,6 +225,8 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
         setCustomCategoryName(equipmentToEdit.category || '');
       }
       setCity(equipmentToEdit.city || '');
+      setPostalCode(equipmentToEdit.postalCode || '');
+      setRegion(equipmentToEdit.region || '');
       setDailyRate(equipmentToEdit.dailyRate ?? '');
       setDepositAmount(equipmentToEdit.depositAmount ?? '');
       setPartnerArtisan(equipmentToEdit.partnerArtisan || '');
@@ -257,6 +262,8 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
       setCustomCategoryName('');
       setCategorySearchQuery('');
       setCity(defaultCity);
+      setPostalCode('');
+      setRegion('');
       setDailyRate('');
       setDepositAmount('');
       setPartnerArtisan(defaultOwner);
@@ -349,6 +356,24 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
       return;
     }
 
+    if (!city.trim()) {
+      setActiveTab('info');
+      setFormError('La ville de retrait de l\'équipement est obligatoire.');
+      return;
+    }
+
+    if (postalCode && !/^\d{5}$/.test(postalCode.trim())) {
+      setActiveTab('info');
+      setFormError('Le code postal doit contenir exactement 5 chiffres.');
+      return;
+    }
+
+    if (!region) {
+      setActiveTab('info');
+      setFormError('Sélectionnez la région de retrait de l\'équipement.');
+      return;
+    }
+
     if (dailyRate === '' || Number(dailyRate) <= 0) {
       setActiveTab('pricing');
       setFormError('Le tarif de location par jour doit être supérieur à 0 €.');
@@ -388,6 +413,8 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
       name: name.trim(),
       category: finalCategory,
       city: city.trim() || 'France',
+      postalCode: postalCode.trim(),
+      region,
       dailyRate: Number(dailyRate),
       depositAmount: Number(depositAmount), // Strict mandatory caution deposit
       image: finalImage,
@@ -615,16 +642,52 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
                           <MapPin className="w-3 h-3 text-slate-400" />
-                          <span>Ville & Code Postal <span className="text-amber-600">*</span></span>
+                          <span>Ville de retrait <span className="text-amber-600">*</span></span>
                         </label>
                         <input
                           type="text"
                           required
                           value={city}
                           onChange={(e) => setCity(e.target.value)}
-                          placeholder="Ex: Bordeaux (33), Lyon 3e, Paris 11e..."
+                          placeholder="Ex: Bordeaux, Lyon, Paris 11e…"
                           className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
                         />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                          Code postal <span className="text-slate-400 font-normal">(optionnel)</span>
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={5}
+                          value={postalCode}
+                          onChange={(e) => setPostalCode(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                          placeholder="Ex: 33000"
+                          className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                          Région de retrait <span className="text-amber-600">*</span>
+                        </label>
+                        <select
+                          required
+                          value={region}
+                          onChange={(e) => setRegion(e.target.value)}
+                          className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                        >
+                          <option value="">Sélectionnez une région…</option>
+                          {FRENCH_REGIONS.map((regionName) => (
+                            <option key={regionName} value={regionName}>
+                              {regionName}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
 
@@ -1287,7 +1350,11 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
                   <div className="p-4 space-y-2.5">
                     <div className="flex items-center justify-between text-[11px] text-slate-500">
                       <span className="font-bold text-amber-700 uppercase tracking-wider">{category}</span>
-                      <span className="truncate max-w-[120px] font-medium">{city || partnerArtisan || 'France'}</span>
+                      <span className="truncate max-w-[120px] font-medium">
+                        {[city, postalCode ? `(${postalCode})` : '', region].filter(Boolean).join(' · ') ||
+                          partnerArtisan ||
+                          'France'}
+                      </span>
                     </div>
 
                     <h4 className="font-bold text-slate-950 text-sm leading-snug line-clamp-1">

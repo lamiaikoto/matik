@@ -12,6 +12,8 @@ export interface Equipment {
   }[];
   partnerArtisan: string;
   city?: string;
+  postalCode?: string;
+  region?: string;
   condition?: 'neuf' | 'tres_bon_etat' | 'bon_etat';
   tags?: string[];
   inStock: boolean;

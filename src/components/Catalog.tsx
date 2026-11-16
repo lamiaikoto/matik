@@ -14,8 +14,11 @@ import {
   MapPin,
   Lock,
   RefreshCw,
+  Search,
+  RotateCcw,
 } from 'lucide-react';
 import { EQUIPMENT_CATEGORIES } from '../data/equipment';
+import { FRENCH_REGIONS, normalizeText } from '../data/regions';
 import { getEquipmentAvailability } from '../utils/availability';
 import { fetchAllReviews, summarizeByEquipment, subscribeToReviews, type RatingSummary } from '../lib/reviewService';
 import { CatalogSkeletonGrid } from './CatalogSkeletonGrid';
@@ -42,6 +45,9 @@ export const Catalog: React.FC<CatalogProps> = ({
   onViewDetails,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('Tous');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedRegion, setSelectedRegion] = useState<string>('Toutes');
+  const [locationQuery, setLocationQuery] = useState<string>('');
   const [ratingSummaries, setRatingSummaries] = useState<Record<string, RatingSummary>>({});
 
   // Avis publics + temps réel : la note affichée est toujours la moyenne réelle.
@@ -85,11 +91,46 @@ export const Catalog: React.FC<CatalogProps> = ({
   }, [activeEquipments]);
 
   const filteredEquipment = useMemo(() => {
-    if (selectedCategory === 'Tous') {
-      return activeEquipments;
-    }
-    return activeEquipments.filter((item) => item.category === selectedCategory);
-  }, [activeEquipments, selectedCategory]);
+    const keyword = normalizeText(searchQuery);
+    const location = normalizeText(locationQuery);
+
+    return activeEquipments.filter((item) => {
+      if (selectedCategory !== 'Tous' && item.category !== selectedCategory) {
+        return false;
+      }
+
+      if (selectedRegion !== 'Toutes' && normalizeText(item.region) !== normalizeText(selectedRegion)) {
+        return false;
+      }
+
+      if (keyword) {
+        const haystack = normalizeText(`${item.name} ${item.description}`);
+        if (!haystack.includes(keyword)) return false;
+      }
+
+      if (location) {
+        const locationHaystack = normalizeText(
+          `${item.city || ''} ${item.postalCode || ''} ${item.region || ''}`
+        );
+        if (!locationHaystack.includes(location)) return false;
+      }
+
+      return true;
+    });
+  }, [activeEquipments, selectedCategory, selectedRegion, searchQuery, locationQuery]);
+
+  const hasActiveFilters =
+    selectedCategory !== 'Tous' ||
+    selectedRegion !== 'Toutes' ||
+    searchQuery.trim().length > 0 ||
+    locationQuery.trim().length > 0;
+
+  const resetFilters = () => {
+    setSelectedCategory('Tous');
+    setSelectedRegion('Toutes');
+    setSearchQuery('');
+    setLocationQuery('');
+  };
 
   return (
     <section id="catalogue" className="py-16 lg:py-24 border-b border-slate-200/80 bg-[#F8FAFC]">
@@ -123,8 +164,109 @@ export const Catalog: React.FC<CatalogProps> = ({
           </div>
         </div>
 
+        {/* Recherche multicritères : mot-clé, catégorie, région, ville / code postal */}
+        <div className="mt-8 rounded-2xl bg-white border border-slate-200/90 shadow-sm p-4 sm:p-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
+            {/* Mot-clé */}
+            <div className="lg:col-span-4">
+              <label htmlFor="catalogSearch" className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                Mot-clé
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <input
+                  id="catalogSearch"
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Titre ou description de l'équipement…"
+                  className="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+            </div>
+
+            {/* Catégorie synchronisée avec les pastilles */}
+            <div className="lg:col-span-2">
+              <label htmlFor="catalogCategory" className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                Catégorie
+              </label>
+              <select
+                id="catalogCategory"
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 cursor-pointer"
+              >
+                {categories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Région */}
+            <div className="lg:col-span-3">
+              <label htmlFor="catalogRegion" className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                Région
+              </label>
+              <select
+                id="catalogRegion"
+                value={selectedRegion}
+                onChange={(e) => setSelectedRegion(e.target.value)}
+                className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 cursor-pointer"
+              >
+                <option value="Toutes">Toutes les régions</option>
+                {FRENCH_REGIONS.map((region) => (
+                  <option key={region} value={region}>
+                    {region}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Ville ou code postal */}
+            <div className="lg:col-span-3">
+              <label htmlFor="catalogLocation" className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                Ville ou code postal
+              </label>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <input
+                  id="catalogLocation"
+                  type="text"
+                  value={locationQuery}
+                  onChange={(e) => setLocationQuery(e.target.value)}
+                  placeholder="Ex : Lyon, 69003, Bordeaux…"
+                  className="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[11px] text-slate-500">
+              <strong className="text-slate-900 font-bold">{filteredEquipment.length}</strong> résultat
+              {filteredEquipment.length > 1 ? 's' : ''} sur {activeEquipments.length} annonce
+              {activeEquipments.length > 1 ? 's' : ''} publiée{activeEquipments.length > 1 ? 's' : ''}
+            </p>
+            <button
+              type="button"
+              onClick={resetFilters}
+              disabled={!hasActiveFilters}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold border transition-colors ${
+                hasActiveFilters
+                  ? 'bg-slate-900 text-white border-slate-900 hover:bg-slate-800 cursor-pointer'
+                  : 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed'
+              }`}
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Réinitialiser les filtres</span>
+            </button>
+          </div>
+        </div>
+
         {/* Ergonomic Category Filter Pills (placées juste en haut du catalogue) */}
-        <div className="mt-8 flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+        <div className="mt-6 flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
           {categories.map((category) => {
             const isSelected = selectedCategory === category;
             return (
@@ -153,35 +295,18 @@ export const Catalog: React.FC<CatalogProps> = ({
           })}
         </div>
 
-        {/* Results summary (only when there are items) */}
-        {activeEquipments.length > 0 && (
-          <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
-            <span className="flex items-center gap-2">
-              <span>
-                Affichage de <strong className="text-slate-900 font-bold">{filteredEquipment.length}</strong> équipement
-                {filteredEquipment.length > 1 ? 's' : ''} disponible{filteredEquipment.length > 1 ? 's' : ''}
-              </span>
-              {isLoading && (
-                <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                  <RefreshCw className="w-3 h-3 animate-spin text-amber-600" />
-                  <span>Synchronisation...</span>
-                </span>
-              )}
+        {/* Indicateur de synchronisation temps réel */}
+        {isLoading && activeEquipments.length > 0 && (
+          <div className="mt-4 flex items-center gap-2 text-xs text-slate-500">
+            <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+              <RefreshCw className="w-3 h-3 animate-spin text-amber-600" />
+              <span>Synchronisation...</span>
             </span>
-            {selectedCategory !== 'Tous' && (
-              <button
-                type="button"
-                onClick={() => setSelectedCategory('Tous')}
-                className="text-amber-700 hover:text-amber-800 font-semibold underline cursor-pointer"
-              >
-                Réinitialiser les filtres
-              </button>
-            )}
           </div>
         )}
 
         {/* Skeleton Grid pendant le chargement initial quand aucune annonce n'est encore disponible */}
-        {isLoading && filteredEquipment.length === 0 ? (
+        {isLoading && activeEquipments.length === 0 ? (
           <CatalogSkeletonGrid count={8} />
         ) : filteredEquipment.length === 0 ? (
           <div className="mt-12 py-16 px-6 max-w-xl mx-auto text-center bg-white border border-slate-200/90 rounded-2xl shadow-sm space-y-5">
@@ -190,21 +315,36 @@ export const Catalog: React.FC<CatalogProps> = ({
             </div>
             <div className="space-y-2">
               <h3 className="text-xl font-bold text-slate-950">
-                Aucun équipement disponible pour le moment. Soyez le premier à déposer une annonce !
+                {activeEquipments.length === 0
+                  ? 'Aucun équipement disponible pour le moment. Soyez le premier à déposer une annonce !'
+                  : 'Aucun équipement ne correspond à vos filtres.'}
               </h3>
               <p className="text-sm text-slate-600 leading-relaxed max-w-md mx-auto">
-                Rentabilisez le matériel qui dort chez vous ou à l'atelier en toute sécurité avec contrat automatisé et caution sécurisée Stripe.
+                {activeEquipments.length === 0
+                  ? 'Rentabilisez le matériel qui dort chez vous ou à l\'atelier avec contrat numérique et empreinte de caution Stripe.'
+                  : 'Élargissez votre recherche (mot-clé, région ou ville/code postal) ou réinitialisez les filtres pour retrouver toutes les annonces.'}
               </p>
             </div>
             <div className="pt-2">
-              <button
-                type="button"
-                onClick={onAddNewEquipment}
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider text-slate-950 bg-amber-400 hover:bg-amber-300 active:scale-98 transition-all shadow-md shadow-amber-400/25 cursor-pointer"
-              >
-                <Plus className="w-4 h-4 stroke-[2.5]" />
-                <span>Déposer une annonce</span>
-              </button>
+              {activeEquipments.length === 0 ? (
+                <button
+                  type="button"
+                  onClick={onAddNewEquipment}
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider text-slate-950 bg-amber-400 hover:bg-amber-300 active:scale-98 transition-all shadow-md shadow-amber-400/25 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                  <span>Déposer une annonce</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider text-white bg-slate-900 hover:bg-slate-800 active:scale-98 transition-all shadow-md cursor-pointer"
+                >
+                  <RotateCcw className="w-4 h-4 stroke-[2.5]" />
+                  <span>Réinitialiser les filtres</span>
+                </button>
+              )}
             </div>
           </div>
         ) : (
@@ -300,15 +440,26 @@ export const Catalog: React.FC<CatalogProps> = ({
                         <span className="font-semibold text-amber-700 uppercase tracking-wider text-[11px]">
                           {item.category}
                         </span>
-                        <div className="flex items-center gap-1 text-[11px] text-slate-500 font-medium truncate max-w-[150px]">
+                        <div className="flex flex-col items-end gap-0.5 text-[11px] text-slate-500 font-medium max-w-[160px]">
                           {item.city ? (
-                            <span className="inline-flex items-center gap-1 text-slate-600 truncate" title={item.city}>
+                            <span
+                              className="inline-flex items-center gap-1 text-slate-600 max-w-full"
+                              title={[item.city, item.postalCode].filter(Boolean).join(' ')}
+                            >
                               <MapPin className="w-3 h-3 text-amber-500 shrink-0" />
-                              <span className="truncate">{item.city}</span>
+                              <span className="truncate">
+                                {item.city}
+                                {item.postalCode ? ` (${item.postalCode})` : ''}
+                              </span>
                             </span>
                           ) : (
                             <span className="truncate" title={item.partnerArtisan}>
                               {item.partnerArtisan}
+                            </span>
+                          )}
+                          {item.region && (
+                            <span className="truncate text-[10px] text-slate-400 max-w-full" title={item.region}>
+                              {item.region}
                             </span>
                           )}
                         </div>

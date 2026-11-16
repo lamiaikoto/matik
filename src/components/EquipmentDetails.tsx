@@ -191,12 +191,16 @@ export const EquipmentDetails: React.FC<EquipmentDetailsProps> = ({
                         <span>Loueur</span>
                         <strong className="text-slate-900">{equipment.partnerArtisan}</strong>
                       </div>
-                      {equipment.city && (
-                        <div className="flex justify-between py-1 border-b border-slate-200">
+                      {(equipment.city || equipment.region) && (
+                        <div className="flex justify-between py-1 border-b border-slate-200 gap-3">
                           <span>Localisation</span>
-                          <strong className="text-slate-900 flex items-center gap-1">
-                            <MapPin className="w-3 h-3 text-amber-500" />
-                            {equipment.city}
+                          <strong className="text-slate-900 flex items-center gap-1 text-right">
+                            <MapPin className="w-3 h-3 text-amber-500 shrink-0" />
+                            <span>
+                              {[equipment.city, equipment.postalCode ? `(${equipment.postalCode})` : '', equipment.region]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </span>
                           </strong>
                         </div>
                       )}
