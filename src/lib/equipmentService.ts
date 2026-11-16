@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { Equipment } from '../types';
+import { anonymizeFullName, stripAccountNicknames, resolvePublicDisplayName } from './publicIdentity';
 
 /**
  * Structure de la table 'equipments' dans Supabase :
@@ -39,6 +40,8 @@ interface EquipmentMetadata {
   region?: string;
   specs?: { label: string; value: string }[];
   partnerArtisan?: string;
+  /** true dès que le loueur a choisi/modifié librement son nom public (annonces récentes). */
+  displayNameChosen?: boolean;
   condition?: 'neuf' | 'tres_bon_etat' | 'bon_etat';
   tags?: string[];
   ownerType?: 'pro' | 'particulier';
@@ -122,7 +125,11 @@ export const mapSupabaseRowToEquipment = (row: SupabaseEquipmentRow): Equipment 
     depositAmount: Number(row.deposit_amount) || 0,
     image: row.image_url || '',
     description: cleanDescription || 'Équipement vérifié et garanti avec caution sécurisée Stripe sans débit.',
-    partnerArtisan: metadata.partnerArtisan || metadata.ownerName || 'Loueur Partenaire Matik',
+    partnerArtisan: resolvePublicDisplayName(
+      metadata.partnerArtisan,
+      metadata.ownerName,
+      metadata.displayNameChosen === true
+    ),
     city: row.city || metadata.city || 'France',
     postalCode: row.postal_code || metadata.postalCode || '',
     region: row.region || metadata.region || '',
@@ -229,6 +236,7 @@ export const saveEquipmentToSupabase = async (
       postalCode: equipment.postalCode || '',
       region: equipment.region || '',
       partnerArtisan: equipment.partnerArtisan,
+      displayNameChosen: true,
       specs: equipment.specs || [],
       condition: equipment.condition,
       tags: equipment.tags || [],

@@ -2,7 +2,16 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
+import fs from 'fs';
 import { defineConfig } from 'vite';
+
+// Confine les fichiers temporaires de build (notamment workbox/tempy) dans le workspace
+const localTmp = path.resolve(import.meta.dirname, 'node_modules/.tmp');
+try {
+  fs.mkdirSync(localTmp, { recursive: true });
+  process.env.TEMP = localTmp;
+  process.env.TMP = localTmp;
+} catch {}
 
 export default defineConfig(() => {
   return {

@@ -19,6 +19,7 @@ import {
   subscribeToReviews,
 } from '../lib/reviewService';
 import { supabase } from '../lib/supabase';
+import { buildPublicDisplayNameSuggestion } from '../lib/publicIdentity';
 
 interface ReviewSystemProps {
   equipmentId: string;
@@ -43,15 +44,7 @@ export const ReviewSystem: React.FC<ReviewSystemProps> = ({
   const [rating, setRating] = useState<number>(5);
   const [hoverRating, setHoverRating] = useState<number>(0);
   const [authorName, setAuthorName] = useState<string>(() => {
-    if (currentUser) {
-      if ('prenom' in currentUser && 'nom' in currentUser) {
-        return `${currentUser.prenom} ${currentUser.nom}`;
-      }
-      if ('name' in currentUser) {
-        return currentUser.name;
-      }
-    }
-    return '';
+    return buildPublicDisplayNameSuggestion(currentUser || null);
   });
   const [comment, setComment] = useState<string>('');
   const [rentalDuration, setRentalDuration] = useState<string>('Location week-end');
@@ -61,14 +54,10 @@ export const ReviewSystem: React.FC<ReviewSystemProps> = ({
   const [filterRating, setFilterRating] = useState<number | 'all'>('all');
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Synchronise le nom affiché si la session change
+  // Suggestion anonymisée (Prénom + initiale) si la session devient active
   useEffect(() => {
     if (currentUser && !authorName) {
-      if ('prenom' in currentUser && 'nom' in currentUser) {
-        setAuthorName(`${currentUser.prenom} ${currentUser.nom}`);
-      } else if ('name' in currentUser) {
-        setAuthorName(currentUser.name);
-      }
+      setAuthorName(buildPublicDisplayNameSuggestion(currentUser));
     }
   }, [currentUser]);
 

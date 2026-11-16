@@ -3,6 +3,7 @@ import { Equipment, CurrentUser } from '../types';
 import { EQUIPMENT_CATEGORIES } from '../data/equipment';
 import { FRENCH_REGIONS } from '../data/regions';
 import { generateUUID, isValidUUID } from '../lib/equipmentService';
+import { buildPublicDisplayNameSuggestion } from '../lib/publicIdentity';
 import {
   X,
   Plus,
@@ -27,6 +28,7 @@ import {
   Layers,
   Phone,
   Mail,
+  User,
   Search,
   ArrowRight,
   TrendingUp,
@@ -240,14 +242,9 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
       setSelectedTags(equipmentToEdit.tags || []);
     } else {
       // Nouvelle annonce 100% propre : aucun chiffre démo pré-rempli
-      const defaultOwner =
-        currentUser?.role === 'loueur_pro'
-          ? currentUser.companyName || currentUser.name
-          : currentUser?.role === 'loueur_particulier'
-          ? `${currentUser.prenom} ${currentUser.nom}`.trim()
-          : currentUser && 'prenom' in currentUser && currentUser.prenom
-          ? `${currentUser.prenom} ${currentUser.nom || ''}`.trim()
-          : currentUser?.name || '';
+      // Le nom public n'est jamais repris tel quel du compte (nom complet / pseudo OAuth) :
+      // on propose au maximum une forme anonymisée (prénom + initiale), librement modifiable.
+      const suggestedDisplayName = buildPublicDisplayNameSuggestion(currentUser);
 
       const defaultCity =
         currentUser && 'city' in currentUser && currentUser.city
@@ -266,7 +263,7 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
       setRegion('');
       setDailyRate('');
       setDepositAmount('');
-      setPartnerArtisan(defaultOwner);
+      setPartnerArtisan(suggestedDisplayName);
       setOwnerType(defaultType);
       setOwnerPhone(currentUser?.phone || '');
       setOwnerEmail(currentUser?.email || '');
@@ -362,6 +359,18 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
       return;
     }
 
+    if (!partnerArtisan.trim()) {
+      setActiveTab('info');
+      setFormError('Choisissez un nom affiché public pour votre profil loueur (ex : Sheriff G., Atelier Pro 95). Il sera le seul nom visible sur vos annonces.');
+      return;
+    }
+
+    if (partnerArtisan.includes('@')) {
+      setActiveTab('info');
+      setFormError('Le nom affiché est public : n\'y indiquez pas d\'adresse e-mail.');
+      return;
+    }
+
     if (postalCode && !/^\d{5}$/.test(postalCode.trim())) {
       setActiveTab('info');
       setFormError('Le code postal doit contenir exactement 5 chiffres.');
@@ -421,10 +430,10 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
       description:
         description.trim() ||
         'Équipement disponible à la location avec caution sécurisée Stripe sans débit.',
-      partnerArtisan: partnerArtisan.trim() || (ownerType === 'pro' ? 'Loueur Professionnel' : 'Loueur Particulier'),
+      partnerArtisan: partnerArtisan.trim(),
       ownerType,
       ownerId: currentUser?.id || equipmentToEdit?.ownerId,
-      ownerName: partnerArtisan.trim() || (ownerType === 'pro' ? 'Loueur Professionnel' : 'Loueur Particulier'),
+      ownerName: partnerArtisan.trim(),
       ownerEmail: ownerEmail.trim() || currentUser?.email || '',
       ownerPhone: ownerPhone.trim() || currentUser?.phone || '',
       condition,
@@ -575,18 +584,18 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
               {/* TAB 1: OBJET & CATÉGORIE */}
               {activeTab === 'info' && (
                 <div className="space-y-5 animate-in fade-in duration-150">
-                  {/* Auto-remplissage notification banner */}
+                  {/* Bandeau de session : aucune donnée d'état civil affichée */}
                   {currentUser && !isEditing && (
                     <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                         <span>
-                          <strong>Session active détectée :</strong> Vos coordonnées de loueur (
-                          {currentUser.role === 'loueur_pro' ? currentUser.companyName : `${partnerArtisan || currentUser.name}`}) sont pré-remplies automatiquement.
+                          <strong>Session active détectée :</strong> vos coordonnées de contact sont pré-remplies en toute confidentialité.
+                          Choisissez librement le nom public qui apparaîtra sur vos annonces.
                         </span>
                       </div>
                       <span className="text-[10px] uppercase font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300 shrink-0">
-                        Auto-rempli
+                        Compte connecté
                       </span>
                     </div>
                   )}
@@ -632,11 +641,15 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
                         <input
                           type="text"
                           required
+                          maxLength={40}
                           value={partnerArtisan}
                           onChange={(e) => setPartnerArtisan(e.target.value)}
-                          placeholder="Ex: Studio Ciné Pro, Alexandre M...."
+                          placeholder="Ex : Sheriff G. ou Atelier Pro 95"
                           className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
                         />
+                        <p className="mt-1 text-[10px] leading-snug text-slate-500">
+                          Seul ce nom sera visible publiquement. N'indiquez ni votre nom complet, ni votre e-mail.
+                        </p>
                       </div>
 
                       <div>
@@ -1360,6 +1373,15 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
                     <h4 className="font-bold text-slate-950 text-sm leading-snug line-clamp-1">
                       {name || 'Titre de votre équipement'}
                     </h4>
+
+                    {/* Loueur affiché preview */}
+                    <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                      <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="text-slate-500 text-[11px]">Loueur :</span>
+                      <span className="font-semibold text-slate-800 truncate text-[11px]" title={partnerArtisan || 'Ex : Sheriff G.'}>
+                        {partnerArtisan.trim() || <span className="text-slate-400 italic font-normal">À définir (ex : Sheriff G.)</span>}
+                      </span>
+                    </div>
 
                     {/* Specs preview */}
                     {specsList.length > 0 && (

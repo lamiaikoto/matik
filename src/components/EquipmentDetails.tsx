@@ -17,6 +17,7 @@ import {
 import { Equipment, CurrentUser, BookingRecord } from '../types';
 import { ReviewSystem } from './ReviewSystem';
 import { getEquipmentAvailability } from '../utils/availability';
+import { resolvePublicDisplayName } from '../lib/publicIdentity';
 
 interface EquipmentDetailsProps {
   equipment: Equipment | null;
@@ -43,6 +44,10 @@ export const EquipmentDetails: React.FC<EquipmentDetailsProps> = ({
 
   const isParticulier = equipment.ownerType === 'particulier';
   const availability = getEquipmentAvailability(equipment, bookingList);
+  const publicDisplayName = resolvePublicDisplayName(
+    equipment.partnerArtisan,
+    equipment.ownerName
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-200">
@@ -62,7 +67,7 @@ export const EquipmentDetails: React.FC<EquipmentDetailsProps> = ({
                 {equipment.name}
               </h2>
               <p className="text-xs text-slate-400 truncate">
-                {equipment.category} · Propriétaire : {equipment.partnerArtisan}
+                {equipment.category} · Loueur : {publicDisplayName}
               </p>
             </div>
           </div>
@@ -188,8 +193,8 @@ export const EquipmentDetails: React.FC<EquipmentDetailsProps> = ({
                         <strong className="text-slate-900">{equipment.category}</strong>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-200">
-                        <span>Loueur</span>
-                        <strong className="text-slate-900">{equipment.partnerArtisan}</strong>
+                        <span>Loueur (nom affiché)</span>
+                        <strong className="text-slate-900">{publicDisplayName}</strong>
                       </div>
                       {(equipment.city || equipment.region) && (
                         <div className="flex justify-between py-1 border-b border-slate-200 gap-3">

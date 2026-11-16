@@ -15,6 +15,7 @@ import {
   Lock,
   RefreshCw,
   RotateCcw,
+  User,
 } from 'lucide-react';
 import { EQUIPMENT_CATEGORIES } from '../data/equipment';
 import { normalizeText } from '../data/regions';
@@ -23,6 +24,7 @@ import { SearchFilterBar } from './SearchFilterBar';
 import { getEquipmentAvailability } from '../utils/availability';
 import { fetchAllReviews, summarizeByEquipment, subscribeToReviews, type RatingSummary } from '../lib/reviewService';
 import { CatalogSkeletonGrid } from './CatalogSkeletonGrid';
+import { resolvePublicDisplayName } from '../lib/publicIdentity';
 
 interface CatalogProps {
   equipmentList: Equipment[];
@@ -259,6 +261,7 @@ export const Catalog: React.FC<CatalogProps> = ({
               const availability = getEquipmentAvailability(item, bookingList);
               const ratingSummary = ratingSummaries[item.id];
               const reviewCount = ratingSummary?.count || 0;
+              const publicOwnerName = resolvePublicDisplayName(item.partnerArtisan, item.ownerName);
 
               return (
                 <div
@@ -338,13 +341,13 @@ export const Catalog: React.FC<CatalogProps> = ({
 
                     {/* Card Content Body */}
                     <div className="p-5 space-y-3">
-                      {/* Category & Location / Partner */}
+                      {/* Category & Location */}
                       <div className="flex items-center justify-between text-xs text-slate-500">
                         <span className="font-semibold text-amber-700 uppercase tracking-wider text-[11px]">
                           {item.category}
                         </span>
                         <div className="flex flex-col items-end gap-0.5 text-[11px] text-slate-500 font-medium max-w-[160px]">
-                          {item.city ? (
+                          {item.city && (
                             <span
                               className="inline-flex items-center gap-1 text-slate-600 max-w-full"
                               title={[item.city, item.postalCode].filter(Boolean).join(' ')}
@@ -354,10 +357,6 @@ export const Catalog: React.FC<CatalogProps> = ({
                                 {item.city}
                                 {item.postalCode ? ` (${item.postalCode})` : ''}
                               </span>
-                            </span>
-                          ) : (
-                            <span className="truncate" title={item.partnerArtisan}>
-                              {item.partnerArtisan}
                             </span>
                           )}
                           {item.region && (
@@ -375,6 +374,15 @@ export const Catalog: React.FC<CatalogProps> = ({
                       >
                         {item.name}
                       </h3>
+
+                      {/* Nom affiché public du loueur (aucun e-mail, aucun état civil complet non consenti) */}
+                      <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                        <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="text-slate-500 text-[11px]">Loueur :</span>
+                        <span className="font-semibold text-slate-800 truncate text-[11px]" title={publicOwnerName}>
+                          {publicOwnerName}
+                        </span>
+                      </div>
 
                       {/* Description */}
                       <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">

@@ -36,6 +36,7 @@ import {
   subscribeToEquipments,
   generateUUID,
 } from './lib/equipmentService';
+import { buildPublicDisplayNameSuggestion } from './lib/publicIdentity';
 import { sendConfirmationEmailAfterValidation, releaseStripeCautionApi, syncCautionSessionDetailsApi } from './services/booking';
 import {
   fetchBookingsForUser,
@@ -632,14 +633,7 @@ export default function App() {
       image: '',
       description: '',
       specs: [],
-      partnerArtisan:
-        currentUser?.role === 'loueur_pro'
-          ? currentUser.companyName || currentUser.name
-          : currentUser?.role === 'loueur_particulier'
-          ? `${currentUser.prenom} ${currentUser.nom}`.trim()
-          : currentUser && 'prenom' in currentUser && currentUser.prenom
-          ? `${currentUser.prenom} ${currentUser.nom || ''}`.trim()
-          : currentUser?.name || '',
+      partnerArtisan: buildPublicDisplayNameSuggestion(currentUser),
       inStock: true,
       isActive: true,
       is_published: true,
