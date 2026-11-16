@@ -86,7 +86,7 @@ export const Footer: React.FC<{
                   }}
                   className="hover:text-slate-950 transition-colors cursor-pointer text-left"
                 >
-                  Garanties & Caution Stripe
+                  Caution & Contrats
                 </button>
               </li>
             </ul>
@@ -96,9 +96,9 @@ export const Footer: React.FC<{
           <div className="space-y-3">
             <h5 className="font-semibold text-slate-950 uppercase tracking-wider text-[11px]">Engagements</h5>
             <ul className="space-y-2">
-              <li><span className="text-slate-600">Contrat numérique horodaté</span></li>
-              <li><span className="text-slate-600">Empreinte Stripe sans débit immédiat</span></li>
+              <li><span className="text-slate-600">Empreinte Stripe sécurisée</span></li>
               <li><span className="text-slate-600">État des lieux photo contradictoire</span></li>
+              <li><span className="text-slate-600">Contrat numérique de location</span></li>
               <li><span className="text-slate-600">Loueurs et locataires identifiés</span></li>
             </ul>
           </div>
@@ -174,7 +174,7 @@ export const Footer: React.FC<{
           <div className="flex items-center gap-4">
             <span className="text-slate-600">Paiement & Empreinte sécurisés par Stripe</span>
             <span>·</span>
-            <span className="text-slate-600">Contrat numérique horodaté</span>
+            <span className="text-slate-600">Contrat numérique de location</span>
           </div>
         </div>
       </div>

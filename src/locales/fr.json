@@ -4,7 +4,7 @@
     "catalogue": "Catalogue",
     "myListings": "Mes Annonces",
     "loueurSpace": "Espace Loueur",
-    "guarantees": "Garanties & Confiance",
+    "guarantees": "Caution & Contrats",
     "book": "Réserver",
     "listItem": "Déposer une annonce",
     "myAnnouncements": "Mes Annonces",
@@ -118,7 +118,7 @@
     "rights": "Tous droits réservés.",
     "catalogue": "Catalogue complet",
     "loueurSpace": "Espace Loueur",
-    "guarantees": "Garanties & Caution Stripe",
+    "guarantees": "Caution & Contrats",
     "contact": "Nous contacter",
     "privacy": "Confidentialité",
     "terms": "Conditions d'utilisation"

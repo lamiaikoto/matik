@@ -4,7 +4,7 @@
     "catalogue": "Catalogue",
     "myListings": "My Listings",
     "loueurSpace": "Lender Space",
-    "guarantees": "Guarantees & Trust",
+    "guarantees": "Deposit & Contracts",
     "book": "Book",
     "listItem": "List an item",
     "myAnnouncements": "My Listings",
@@ -118,7 +118,7 @@
     "rights": "All rights reserved.",
     "catalogue": "Full catalogue",
     "loueurSpace": "Lender Space",
-    "guarantees": "Guarantees & Stripe Deposit",
+    "guarantees": "Deposit & Contracts",
     "contact": "Contact us",
     "privacy": "Privacy",
     "terms": "Terms of use"

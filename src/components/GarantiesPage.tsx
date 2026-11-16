@@ -48,16 +48,47 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
           </div>
 
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-950 tracking-tight leading-tight">
-            Garanties, Caution Stripe & <br />
+            Caution Stripe, état des lieux & <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-600 via-amber-700 to-amber-800">
-              Contrats Numériques Horodatés
+              contrats numériques de mise en relation
             </span>
           </h1>
 
           <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl mx-auto">
             Louer du matériel professionnel ou particulier suppose des règles claires.
-            Découvrez les mécanismes techniques et contractuels mis en place pour sécuriser chaque transaction.
+            Découvrez les mécanismes techniques et contractuels mis en place pour encadrer chaque transaction.
           </p>
+        </div>
+
+        {/* Engagement strip — factual only */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-sm flex items-start gap-3">
+            <Lock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <div className="text-sm font-bold text-slate-950">Empreinte Stripe sécurisée</div>
+              <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
+                Pré-autorisation posée par Stripe, sans prélèvement au moment de la réservation.
+              </p>
+            </div>
+          </div>
+          <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-sm flex items-start gap-3">
+            <Eye className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+            <div>
+              <div className="text-sm font-bold text-slate-950">État des lieux photo contradictoire</div>
+              <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
+                Photos datées au départ et au retour, annexées au contrat et consultables par les deux parties.
+              </p>
+            </div>
+          </div>
+          <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-sm flex items-start gap-3">
+            <FileText className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+            <div>
+              <div className="text-sm font-bold text-slate-950">Contrat numérique de location</div>
+              <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
+                Contrat généré par la plateforme, daté et adressé aux deux parties par e-mail.
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* 3 Pillars Overview Grid */}
@@ -87,10 +118,10 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
             <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center">
               <FileText className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-bold text-slate-950">02. Contrat Numérique Horodaté</h3>
+            <h3 className="text-lg font-bold text-slate-950">02. Contrat numérique de mise en relation</h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Dès la validation de votre réservation, un contrat type régi par le droit français
-              est généré et adressé aux deux parties par e-mail. La date de validation est enregistrée avec la réservation.
+              Dès la validation de votre réservation, un contrat numérique de mise en relation, régi par le droit français,
+              est généré et adressé aux deux parties par e-mail. La date et l'heure de validation sont enregistrées avec la réservation.
             </p>
             <ul className="text-xs text-slate-600 space-y-2 pt-2 border-t border-slate-100">
               <li className="flex items-center gap-2">
@@ -99,7 +130,7 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Horodatage du contrat au moment de la validation</span>
+                <span>Date et heure enregistrées avec la réservation</span>
               </li>
             </ul>
           </div>
@@ -189,7 +220,7 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
           </div>
         </div>
 
-        {/* Deep Dive Section 2: Contract Preview & Official Specimen Template (CLEAN & VIERGE) */}
+        {/* Deep Dive Section 2: Contract Preview & Specimen Template */}
         <div className="p-8 sm:p-10 rounded-3xl bg-white border border-slate-200/90 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1">
@@ -198,10 +229,10 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
                 <span>Cadre Juridique</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">
-                Modèle type de contrat de location & cautionnement
+                Modèle indicatif de contrat numérique de mise en relation
               </h2>
               <p className="text-xs sm:text-sm text-slate-500">
-                Modèle indicatif régi par les articles 1713 et suivants du Code civil français.
+                Contrat de location régi par les articles 1713 et suivants du Code civil français.
               </p>
             </div>
 
@@ -231,16 +262,16 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
             </div>
           </div>
 
-          {/* Clean Official Contract Specimen Card (Vierge et bien construit) */}
+          {/* Clean Contract Specimen Card (vierge et structuré) */}
           <div className="p-6 sm:p-8 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-6 text-xs text-slate-800 shadow-2xs">
             {/* Header Document */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 gap-2">
               <div className="space-y-0.5">
                 <div className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">
-                  RÉPUBLIQUE FRANÇAISE · CONVENTION DE MISE À DISPOSITION & DE CAUTION
+                  CONTRAT NUMÉRIQUE DE MISE EN RELATION · MISE À DISPOSITION DE MATÉRIEL & CAUTION
                 </div>
                 <div className="text-xs text-slate-500 font-medium">
-                  Document dématérialisé édité par la plateforme Matik
+                  Document dématérialisé généré par la plateforme Matik, intermédiaire technique
                 </div>
               </div>
               <div className="text-right">
@@ -329,6 +360,8 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
                   Le Loueur met à disposition du Locataire l'équipement référencé :{' '}
                   <span className="font-semibold text-slate-800 italic">[Désignation précise, marque, modèle, n° de série et accessoires inventoriés]</span>.
                   Un contrôle contradictoire de départ atteste du bon état de marche, de propreté et de la présence des accessoires inventoriés.
+                  Le Loueur demeure seul responsable de la conformité, de l'état et de l'adéquation du matériel à l'usage prévu ;
+                  Matik n'effectue aucun contrôle technique et n'intervient pas dans la vérification des normes applicables au matériel.
                 </p>
               </div>
 
@@ -340,13 +373,13 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
                   Le Locataire souscrit une pré-autorisation bancaire obligatoire d'un montant de{' '}
                   <span className="font-semibold text-amber-700 italic">[Montant de la caution fixé par le loueur en euros]</span>{' '}
                   auprès de l'opérateur de paiement Stripe. Aucun débit effectif n'est opéré sur le compte bancaire du Locataire.
-                  Cette garantie sert exclusivement de gage en cas de détérioration constatée lors du retour ou de non-restitution du matériel.
+                  Cette empreinte sert exclusivement de gage en cas de détérioration constatée lors du retour ou de non-restitution du matériel.
                 </p>
               </div>
 
               <div className="p-4 rounded-xl bg-white border border-slate-200 space-y-1.5">
                 <div className="text-slate-950 font-bold text-xs uppercase tracking-wide">
-                  Article 3 · Restitution, clôture et déblocage de la garantie
+                  Article 3 · Restitution, clôture et levée de l'empreinte
                 </div>
                 <p className="text-slate-600 leading-relaxed text-xs">
                   À l'échéance de la période de location convenue (<span className="italic font-semibold text-slate-800">[Date de début au Date de restitution]</span>),
@@ -369,7 +402,7 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
 
               <div className="p-3.5 rounded-xl bg-white border border-slate-200 text-xs space-y-1">
                 <div className="text-slate-500 font-semibold text-[11px]">Pour le Locataire :</div>
-                <div className="text-slate-900 font-bold">Signature numérique et empreinte 3DS</div>
+                <div className="text-slate-900 font-bold">Validation numérique et empreinte 3DS</div>
                 <div className="text-[10px] text-emerald-700 flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                   <span>Validé sans débit immédiat</span>
@@ -457,7 +490,7 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
             <div className="flex items-center justify-between pb-4 border-b border-slate-200">
               <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-amber-600" />
-                <h3 className="text-lg font-bold text-slate-950">Modèle de contrat Matik</h3>
+                <h3 className="text-lg font-bold text-slate-950">Contrat numérique de mise en relation</h3>
               </div>
               <div className="flex items-center gap-3">
                 <button
@@ -482,28 +515,28 @@ export const GarantiesPage: React.FC<GarantiesPageProps> = ({
             <div className="space-y-4 text-xs text-slate-700 leading-relaxed font-sans">
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center space-y-1">
                 <div className="font-bold text-slate-950 uppercase text-xs">
-                  CONTRAT TYPE DE MISE À DISPOSITION DE MATÉRIEL ET CONVENTION DE CAUTION
+                  CONTRAT NUMÉRIQUE DE MISE EN RELATION — MISE À DISPOSITION DE MATÉRIEL ET CONVENTION DE CAUTION
                 </div>
                 <div className="text-[11px] text-slate-500">
-                  Régie par les articles 1713 à 1778 du Code civil français · Édition standard Matik
+                  Contrat de location régi par les articles 1713 à 1778 du Code civil français · Modèle indicatif édité par Matik
                 </div>
               </div>
 
               <div className="space-y-3">
                 <p>
-                  <strong className="text-slate-950">ARTICLE 1 · PARTIES CONTRACTANTES :</strong> Le contrat est conclu entre le Loueur, personne physique ou morale désignée, et le Locataire signataire, après validation de son identité et acceptation des présentes conditions générales.
+                  <strong className="text-slate-950">ARTICLE 1 · PARTIES CONTRACTANTES :</strong> Le contrat est conclu entre le Loueur, personne physique ou morale désignée, et le Locataire ayant validé sa réservation, après vérification de son identité et acceptation des présentes conditions générales.
                 </p>
                 <p>
-                  <strong className="text-slate-950">ARTICLE 2 · OBJET DU PRÊT / MISE À DISPOSITION :</strong> Le Loueur met à disposition temporaire un équipement en bon état de marche, nettoyé et muni de ses accessoires. Un contrôle contradictoire est réalisé lors de la prise en charge.
+                  <strong className="text-slate-950">ARTICLE 2 · OBJET DU PRÊT / MISE À DISPOSITION :</strong> Le Loueur met à disposition temporaire un équipement en bon état de marche, nettoyé et muni de ses accessoires. Un contrôle contradictoire est réalisé lors de la prise en charge. Le Loueur demeure seul responsable de la conformité et de l'état du matériel mis à disposition ; Matik n'effectue aucun contrôle technique et n'est pas responsable des normes applicables au matériel.
                 </p>
                 <p>
-                  <strong className="text-slate-950">ARTICLE 3 · CAUTION BANCAIRE (STRIPE) :</strong> Pour chaque location, une garantie sous forme d'empreinte bancaire préalable est requise. Le montant est fixé obligatoirement par le loueur lors de la création de l'annonce. Aucun montant n'est débité du compte du locataire au moment de la validation.
+                  <strong className="text-slate-950">ARTICLE 3 · CAUTION BANCAIRE (STRIPE) :</strong> Pour chaque location, une empreinte bancaire préalable est requise. Le montant est fixé obligatoirement par le loueur lors de la création de l'annonce. Aucun montant n'est débité du compte du locataire au moment de la validation.
                 </p>
                 <p>
                   <strong className="text-slate-950">ARTICLE 4 · RESPONSABILITÉ & ASSURANCES :</strong> Matik n'est pas assureur. Le Loueur et le Locataire déclarent disposer des assurances nécessaires pour le matériel et son usage, et demeurent responsables de leurs obligations respectives.
                 </p>
                 <p>
-                  <strong className="text-slate-950">ARTICLE 5 · RESTITUTION & LEVÉE DE GARANTIE :</strong> À la date fixée de restitution, un examen visuel contradictoire est opéré. Le loueur libère ensuite l'empreinte bancaire depuis son espace, après validation du retour.
+                  <strong className="text-slate-950">ARTICLE 5 · RESTITUTION & LEVÉE DE L'EMPREINTE :</strong> À la date fixée de restitution, un examen visuel contradictoire est opéré. Le loueur libère ensuite l'empreinte bancaire depuis son espace, après validation du retour.
                 </p>
                 <p>
                   <strong className="text-slate-950">ARTICLE 6 · DROIT APPLICABLE & VALIDATION ÉLECTRONIQUE :</strong> Le présent contrat est régi par la législation française. La validation du contrat par voie électronique et son horodatage sont enregistrés avec la réservation.

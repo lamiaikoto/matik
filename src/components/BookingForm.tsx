@@ -123,7 +123,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   // Commission Matik 10% & caution calculations (calculs précis conformes au panier)
   const montantCaution = Number(selectedEquipment.depositAmount) || 0;
   const sousTotal = Math.round((Number(selectedEquipment.dailyRate) * Number(dureeJours)) * 100) / 100;
-  const fraisService = Math.round((sousTotal * 0.10) * 100) / 100; // Frais de service et garantie Matik (10%)
+  const fraisService = Math.round((sousTotal * 0.10) * 100) / 100; // Frais de service Matik (10%)
   const totalLocation = Math.round((sousTotal + fraisService) * 100) / 100; // Total final TTC réglé par le client
 
   // Disponibilité en temps réel de l'équipement sélectionné
@@ -661,11 +661,11 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                   <span className="font-mono font-bold text-slate-950 tabular-nums">{sousTotal} €</span>
                 </div>
 
-                {/* Ligne obligatoire : Frais de service & garantie Matik (10%) */}
+                {/* Ligne obligatoire : Frais de service Matik (10%) */}
                 <div className="flex justify-between items-center p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/90 text-amber-950">
                   <div className="flex items-center gap-1.5 font-semibold text-xs sm:text-sm">
                     <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>Frais de service & garantie Matik (10%)</span>
+                    <span>Frais de service Matik (10%)</span>
                   </div>
                   <span className="font-mono font-bold tabular-nums">
                     +{fraisService.toFixed(2).replace('.00', '')} €

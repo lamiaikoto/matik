@@ -621,7 +621,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                   <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200 text-xs text-amber-900 flex items-start gap-3">
                     <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
                     <div>
-                      <strong className="font-bold">Garantie Professionnelle Matik :</strong> Votre numéro SIRET (14 chiffres) est vérifié pour horodater vos contrats et sécuriser les empreintes bancaires de caution sans blocage de fonds.
+                      <strong className="font-bold">Espace Professionnel Matik :</strong> Votre numéro SIRET (14 chiffres) est repris sur vos contrats de location numériques et vos empreintes de caution Stripe, sans blocage de fonds.
                     </div>
                   </div>
 
@@ -1489,7 +1489,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                   <p className="text-xs text-slate-500 leading-relaxed">
                     {currentUser?.role === 'client'
                       ? 'Parcourez le catalogue d\'équipements pour réserver du matériel avec contrat numérique instantané et caution Stripe sans débit.'
-                      : 'Dès qu\'un client effectue une réservation sur votre matériel au catalogue, elle apparaîtra ici avec ses dates, ses coordonnées et l\'empreinte de caution Stripe garantie.'}
+                      : 'Dès qu\'un client effectue une réservation sur votre matériel au catalogue, elle apparaîtra ici avec ses dates, ses coordonnées et l\'empreinte de caution Stripe associée.'}
                   </p>
                 </div>
                 <button

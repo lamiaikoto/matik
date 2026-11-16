@@ -175,7 +175,7 @@ export const PassportQRModal: React.FC<PassportQRModalProps> = ({
                 <span>Caution active</span>
               </div>
               <p className="text-[11px] text-slate-500">
-                Garantie Stripe 0 € débité activée en direct.
+                Empreinte Stripe 0 € débité activée en direct.
               </p>
             </div>
           </div>

@@ -314,7 +314,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                       <span className="font-mono text-amber-800 font-bold text-sm">
                         +{(details.fraisService ?? Math.round((details.totalLocation / 1.1) * 0.10 * 100) / 100).toFixed(2).replace('.00', '')} €
                       </span>
-                      <div className="text-[10px] text-slate-500">Service & Garantie</div>
+                      <div className="text-[10px] text-slate-500">Frais de service Matik</div>
                     </div>
                     <div>
                       <span className="text-slate-400 block text-[10px] uppercase font-bold">Total réglé</span>
@@ -346,7 +346,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
               <div className="flex flex-wrap items-center gap-x-3 text-slate-600">
                 <span>Durée : <strong className="text-slate-900 font-mono font-semibold">{details.dureeJours} jours</strong></span>
                 <span>•</span>
-                <span>Frais de service & garantie Matik (10%) : <strong className="text-amber-700 font-mono font-semibold">+{(details.fraisService ?? Math.round((details.totalLocation / 1.1) * 0.10 * 100) / 100).toFixed(2).replace('.00', '')} €</strong></span>
+                <span>Frais de service Matik (10%) : <strong className="text-amber-700 font-mono font-semibold">+{(details.fraisService ?? Math.round((details.totalLocation / 1.1) * 0.10 * 100) / 100).toFixed(2).replace('.00', '')} €</strong></span>
               </div>
               <div className="pt-0.5">
                 Total final : <strong className="text-slate-950 font-mono font-bold text-sm">{details.totalLocation} € TTC</strong>

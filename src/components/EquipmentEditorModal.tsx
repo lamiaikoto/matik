@@ -438,7 +438,7 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
                   {isEditing ? 'Modifier l\'annonce de location' : 'Déposer une annonce de matériel'}
                 </h3>
                 <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                  Caution Stripe Garantie
+                  Caution Stripe
                 </span>
               </div>
               <p className="text-xs text-slate-500">

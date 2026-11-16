@@ -177,7 +177,7 @@ export const EquipmentDetails: React.FC<EquipmentDetailsProps> = ({
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-500">
-                        Caution Stripe non débitée : simple empreinte bancaire levée par le loueur après état des lieux de retour. Frais de service & garantie Matik (10%) appliqués à la commande.
+                        Caution Stripe non débitée : simple empreinte bancaire levée par le loueur après état des lieux de retour. Frais de service Matik (10%) appliqués à la commande.
                       </p>
                     </div>
 
@@ -296,7 +296,7 @@ export const EquipmentDetails: React.FC<EquipmentDetailsProps> = ({
                 {equipment.tags && equipment.tags.length > 0 && (
                   <div className="space-y-2.5">
                     <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
-                      Garanties & Inclus vérifiés
+                      Équipement & inclus
                     </h3>
                     <div className="flex flex-wrap gap-2">
                       {equipment.tags.map((tag, i) => (
