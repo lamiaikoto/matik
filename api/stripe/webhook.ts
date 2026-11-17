@@ -7,24 +7,24 @@
  * un paiement ou une empreinte de caution.
  *
  * Événements traités :
- *   - checkout.session.completed / checkout.session.async_payment_succeeded
- *       · paiement de la location  → payment_confirmed_at + statut « en_attente_remise »
- *       · empreinte de caution     → intent/session/customer/payment_method
- *   - payment_intent.canceled     → caution libérée
- *   - charge.dispute.created      → caution bloquée (litige)
+ *    - checkout.session.completed / checkout.session.async_payment_succeeded
+ *        · paiement de la location  → payment_confirmed_at + statut « en_attente_remise »
+ *        · empreinte de caution     → intent/session/customer/payment_method
+ *    - payment_intent.canceled     → caution libérée
+ *    - charge.dispute.created      → caution bloquée (litige)
  *
  * Runtime Edge : le corps brut de la requête est indispensable à la vérification
  * de la signature (`stripe-signature`), Vercel ne doit donc pas parser le JSON.
  *
  * Variables d'environnement :
- *   - STRIPE_SECRET_KEY
- *   - STRIPE_WEBHOOK_SECRET
- *   - SUPABASE_SERVICE_ROLE_KEY
- *   - VITE_SUPABASE_URL | SUPABASE_URL
+ *    - STRIPE_SECRET_KEY
+ *    - STRIPE_WEBHOOK_SECRET
+ *    - SUPABASE_SERVICE_ROLE_KEY
+ *    - VITE_SUPABASE_URL | SUPABASE_URL
  * ════════════════════════════════════════════════════════════════════════════
  */
 import Stripe from 'stripe';
-import { getSupabaseAdmin } from '../_lib/bookingSecurity';
+import { getSupabaseAdmin } from '../lib/bookingSecurity';
 
 export const config = { runtime: 'edge' };
 
