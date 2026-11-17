@@ -217,7 +217,7 @@ export async function generateContractPDF(data: ContractData): Promise<Buffer> {
       const lines = [
         [`Prix journalier`, `${data.prixJournalier.toFixed(2)} €`],
         [`Sous-total (${data.dureeJours} jour(s))`, `${data.sousTotal.toFixed(2)} €`],
-        [`Frais de service & garantie Matik (10%)`, `+ ${data.fraisService.toFixed(2)} €`],
+        [`Frais de service Matik (10%)`, `+ ${data.fraisService.toFixed(2)} €`],
         [`TOTAL LOCATION TTC`, `${data.totalLocation.toFixed(2)} €`],
         [`Caution (empreinte bancaire, non débitée)`, `${data.montantCaution.toFixed(2)} €`],
       ];

@@ -12,7 +12,7 @@ import {
   requireUser,
   toErrorPayload,
   type ServerPricing,
-} from './_lib/bookingSecurity';
+} from './lib/bookingSecurity';
 
 // ─── TYPES ──────────────────────────────────────────────────
 export interface ContractData {
@@ -66,6 +66,8 @@ export interface StripeHoldData {
   equipmentId: string;
   montantCaution: number;
   totalLocation: number;
+  /** Frais de service Matik (10 %), base de la commission plateforme. */
+  fraisService?: number;
   appUrl: string;
   startDate?: string;
   endDate?: string;
@@ -191,7 +193,7 @@ async function generateContractPDF(data: ContractData): Promise<Buffer> {
       const lines = [
         ['Prix journalier', `${data.prixJournalier.toFixed(2)} €`],
         [`Sous-total (${data.dureeJours} jour(s))`, `${data.sousTotal.toFixed(2)} €`],
-        ['Frais de service & garantie Matik (10%)', `+ ${data.fraisService.toFixed(2)} €`],
+        ['Frais de service Matik (10%)', `+ ${data.fraisService.toFixed(2)} €`],
         ['TOTAL LOCATION TTC', `${data.totalLocation.toFixed(2)} €`],
         ['Caution (empreinte bancaire, non débitée)', `${data.montantCaution.toFixed(2)} €`],
       ];
@@ -541,8 +543,16 @@ async function createStripePaymentSession(data: StripeHoldData, customerId?: str
 
     const effectiveCustomerId = customerId || (await getOrCreateStripeCustomer(stripe, data.clientEmail, data.clientNom));
 
-    // Commission Matik : 10 % du total HT de location (arrondi en centimes)
-    const applicationFeeCents = Math.round(totalCents * 0.10);
+    // Commission Matik : la totalité des frais de service (10 % du sous-total de location).
+    // On ne prélève pas un pourcentage du total TTC, sinon une part du loyer du loueur serait retenue.
+    const serviceFeeEuros =
+      Number(data.fraisService) > 0
+        ? Number(data.fraisService)
+        : Math.round((data.totalLocation / 1.1) * 0.1 * 100) / 100;
+    const applicationFeeCents = Math.min(
+      totalCents,
+      Math.max(0, Math.round(serviceFeeEuros * 100))
+    );
 
     // Redirection propre après paiement vers la route explicite /booking-success
     const baseUrl = (process.env.APP_URL || data.appUrl || 'https://matikilou.com').replace(/\/+$/, '');
@@ -1166,6 +1176,7 @@ export default async function handler(req: any, res: any) {
       equipmentId: equipment.id,
       montantCaution: pricing.caution,
       totalLocation: pricing.total,
+      fraisService: pricing.serviceFee,
       appUrl,
       startDate: pricing.startDate,
       endDate: pricing.endDate,
