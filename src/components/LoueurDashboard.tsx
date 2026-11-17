@@ -348,8 +348,12 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
     try {
       const status = await getStripeConnectStatus(currentUser.stripeConnectAccountId);
       setConnectStatus(status);
+      if (!status.success && status.error) {
+        setConnectError(status.error);
+      }
     } catch (err: any) {
       console.warn('⚠️ [Stripe Connect] Statut non disponible :', err?.message || err);
+      setConnectError(err?.message || 'Impossible de récupérer le statut Stripe Connect.');
     }
   };
 
