@@ -29,16 +29,33 @@
     text-size-adjust: 100%;
     -webkit-text-size-adjust: 100%;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
-    letter-spacing: -0.01em;
+    /* Le texte courant garde un espacement normal : les mots ne doivent pas paraître collés. */
+    letter-spacing: normal;
+    word-spacing: normal;
   }
 
   body {
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    letter-spacing: normal;
+    word-spacing: normal;
   }
 
-  h1, h2, h3, h4, h5, h6 {
-    letter-spacing: -0.025em;
+  /* Seuls les grands titres conservent un interlettrage légèrement resserré. */
+  h1, h2 {
+    letter-spacing: -0.02em;
+    word-spacing: normal;
+  }
+
+  h3, h4, h5, h6 {
+    letter-spacing: normal;
+    word-spacing: normal;
+  }
+
+  /* Texte courant, paragraphes, libellés, boutons et formulaires : espacement normal. */
+  p, li, a, label, button, input, select, textarea, td, th, small, figcaption, blockquote {
+    letter-spacing: normal;
+    word-spacing: normal;
   }
 }
