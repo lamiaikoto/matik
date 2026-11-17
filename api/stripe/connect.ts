@@ -25,7 +25,7 @@ import {
   toErrorPayload,
   type RequestLike,
   type ResponseLike,
-} from '../lib/bookingSecurity';
+} from '../../lib/bookingSecurity';
 
 export default async function handler(req: RequestLike & { method?: string; body?: any }, res: ResponseLike): Promise<void> {
   const host = typeof req.headers?.host === 'string' ? req.headers.host : undefined;
