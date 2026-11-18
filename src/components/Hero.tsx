@@ -155,6 +155,8 @@ export const Hero: React.FC<HeroProps> = ({
                   alt="Showroom de matériel professionnel et particulier : caméra cinéma, drone, système son et outillage"
                   referrerPolicy="no-referrer"
                   loading="eager"
+                  fetchPriority="high"
+                  decoding="async"
                   className="w-full h-full object-cover object-center transform group-hover:scale-104 transition-transform duration-700 ease-out"
                 />
 

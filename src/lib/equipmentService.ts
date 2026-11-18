@@ -54,6 +54,49 @@ interface EquipmentMetadata {
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
+ * Colonnes réellement nécessaires au catalogue.
+ * On ne fait plus `select('*')` : la table contient des champs internes
+ * (métadonnées, colonnes futures) qui n'ont rien à faire dans le navigateur.
+ */
+const EQUIPMENT_COLUMNS_BASE = [
+  'id',
+  'title',
+  'description',
+  'category',
+  'price_per_day',
+  'deposit_amount',
+  'image_url',
+  'owner_id',
+  'is_published',
+  'created_at',
+].join(',');
+
+const EQUIPMENT_COLUMNS_WITH_LOCATION = `${EQUIPMENT_COLUMNS_BASE},city,region,postal_code`;
+
+const isMissingColumnError = (error: { code?: string; message?: string } | null): boolean =>
+  !!error &&
+  (error.code === '42703' ||
+    error.code === 'PGRST204' ||
+    /column .* does not exist/i.test(error.message || ''));
+
+/**
+ * Lecture des annonces avec colonnes explicites + repli automatique lorsque la
+ * migration 03 (city / region / postal_code) n'a pas encore été exécutée.
+ * Dans ce cas, la localisation reste disponible via les métadonnées.
+ */
+const selectEquipments = async (applyFilters: (query: any) => any): Promise<any> => {
+  const run = (columns: string) => applyFilters(supabase.from('equipments').select(columns));
+
+  const firstName = await run(EQUIPMENT_COLUMNS_WITH_LOCATION);
+  if (!isMissingColumnError(firstName.error)) return firstName;
+
+  console.warn(
+    '[Supabase equipments] Colonnes de localisation absentes — exécutez supabase/migrations/03_add_location_fields.sql. Repli sur les métadonnées.'
+  );
+  return await run(EQUIPMENT_COLUMNS_BASE);
+};
+
+/**
  * Vérifie si une chaîne est un UUID valide pour PostgreSQL
  */
 export const isValidUUID = (id?: string | null): boolean => {
@@ -157,11 +200,9 @@ export const mapSupabaseRowToEquipment = (row: SupabaseEquipmentRow): Equipment 
  */
 export const fetchEquipmentsFromSupabase = async (): Promise<Equipment[]> => {
   try {
-    const { data, error } = await supabase
-      .from('equipments')
-      .select('*')
-      .eq('is_published', true)
-      .order('created_at', { ascending: false });
+    const { data, error } = await selectEquipments((query) =>
+      query.eq('is_published', true).order('created_at', { ascending: false })
+    );
 
     if (error) {
       console.warn('[Supabase equipments] Erreur lors du chargement des annonces publiques:', error);
@@ -185,11 +226,9 @@ export const fetchUserEquipmentsFromSupabase = async (userId: string): Promise<E
   try {
     if (!userId || !isValidUUID(userId)) return [];
 
-    const { data, error } = await supabase
-      .from('equipments')
-      .select('*')
-      .eq('owner_id', userId)
-      .order('created_at', { ascending: false });
+    const { data, error } = await selectEquipments((query) =>
+      query.eq('owner_id', userId).order('created_at', { ascending: false })
+    );
 
     if (error) {
       console.warn('[Supabase equipments] Erreur chargement annonces utilisateur:', error);

@@ -69,6 +69,24 @@ export default defineConfig(() => {
         },
       },
     },
+    build: {
+      // Découpe les dépendances lourdes : le navigateur peut les mettre en cache
+      // séparément du code applicatif, qui change à chaque déploiement.
+      rollupOptions: {
+        output: {
+          manualChunks(id: string) {
+            if (!id.includes('node_modules')) return undefined;
+            if (id.includes('@supabase')) return 'supabase';
+            if (id.includes('i18next')) return 'i18n';
+            if (id.includes('lucide-react')) return 'icons';
+            if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
+              return 'react-vendor';
+            }
+            return undefined;
+          },
+        },
+      },
+    },
   };
 });
 

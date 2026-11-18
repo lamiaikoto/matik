@@ -12,18 +12,42 @@ import { Testimonials } from './components/Testimonials';
 import { BookingForm } from './components/BookingForm';
 import { StripeCautionSection } from './components/StripeCautionSection';
 import { ConfirmationModal } from './components/ConfirmationModal';
-import { EquipmentEditorModal } from './components/EquipmentEditorModal';
-import { LoueurDashboard } from './components/LoueurDashboard';
-import { GarantiesPage } from './components/GarantiesPage';
-import { LegalPage } from './components/LegalPage';
-import { AuthModal } from './components/AuthModal';
 import { AppDownloadBanner } from './components/AppDownloadBanner';
-import { PWAInstallModal } from './components/PWAInstallModal';
-import { ProfitSimulator } from './components/ProfitSimulator';
-import { PassportQRModal } from './components/PassportQRModal';
-import { DigitalInspectionModal } from './components/DigitalInspectionModal';
-import { EquipmentDetails } from './components/EquipmentDetails';
 import { Footer } from './components/Footer';
+
+// ─── Composants lourds chargés à la demande ──────────────────────────────────
+// Ils sortent du bundle initial : premier affichage plus rapide, et le
+// navigateur ne télécharge ces écrans que si l'utilisateur les ouvre.
+const EquipmentEditorModal = React.lazy(() =>
+  import('./components/EquipmentEditorModal').then((m) => ({ default: m.EquipmentEditorModal }))
+);
+const LoueurDashboard = React.lazy(() =>
+  import('./components/LoueurDashboard').then((m) => ({ default: m.LoueurDashboard }))
+);
+const GarantiesPage = React.lazy(() =>
+  import('./components/GarantiesPage').then((m) => ({ default: m.GarantiesPage }))
+);
+const LegalPage = React.lazy(() =>
+  import('./components/LegalPage').then((m) => ({ default: m.LegalPage }))
+);
+const AuthModal = React.lazy(() =>
+  import('./components/AuthModal').then((m) => ({ default: m.AuthModal }))
+);
+const PWAInstallModal = React.lazy(() =>
+  import('./components/PWAInstallModal').then((m) => ({ default: m.PWAInstallModal }))
+);
+const ProfitSimulator = React.lazy(() =>
+  import('./components/ProfitSimulator').then((m) => ({ default: m.ProfitSimulator }))
+);
+const PassportQRModal = React.lazy(() =>
+  import('./components/PassportQRModal').then((m) => ({ default: m.PassportQRModal }))
+);
+const DigitalInspectionModal = React.lazy(() =>
+  import('./components/DigitalInspectionModal').then((m) => ({ default: m.DigitalInspectionModal }))
+);
+const EquipmentDetails = React.lazy(() =>
+  import('./components/EquipmentDetails').then((m) => ({ default: m.EquipmentDetails }))
+);
 import { EQUIPMENT_LIST } from './data/equipment';
 import { CatalogFilters, EMPTY_CATALOG_FILTERS } from './data/catalogFilters';
 import { supabase, mapSupabaseUserToMatikProfile } from './lib/supabase';
@@ -1012,7 +1036,8 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen w-full max-w-full bg-[#F8FAFC] text-slate-900 flex flex-col font-sans selection:bg-amber-400 selection:text-slate-950">
+    <React.Suspense fallback={null}>
+      <div className="min-h-screen w-full max-w-full bg-[#F8FAFC] text-slate-900 flex flex-col font-sans selection:bg-amber-400 selection:text-slate-950">
       {/* Top Navbar with Page Tabs & Espace Loueur Login */}
       <Navbar
         currentPage={currentPage}
@@ -1245,6 +1270,7 @@ export default function App() {
         onDelete={handleDeleteEquipment}
         currentUser={currentUser}
       />
-    </div>
+      </div>
+    </React.Suspense>
   );
 }

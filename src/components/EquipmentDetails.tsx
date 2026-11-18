@@ -123,6 +123,7 @@ export const EquipmentDetails: React.FC<EquipmentDetailsProps> = ({
                       src={equipment.image}
                       alt={equipment.name}
                       referrerPolicy="no-referrer"
+                      decoding="async"
                       className="w-full h-full object-cover"
                     />
                     {/* Top-right: Availability badge */}

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- Application monopage : les pages légales et l'espace loueur ne sont pas
+       des URL distinctes, seuls les points d'entrée publics sont déclarés. -->
+  <url>
+    <loc>https://matikilou.com/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>

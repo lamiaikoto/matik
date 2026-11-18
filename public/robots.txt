@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# Les routes API ne doivent pas être explorées.
+Disallow: /api/
+
+Sitemap: https://matikilou.com/sitemap.xml

@@ -6,16 +6,69 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#F8FAFC" />
+
     <title>Matik - Location de Matériel</title>
     <meta name="description" content="Matik : Faites louer le matériel qui dort chez vous ou à l'atelier. Contrat instantané et caution Stripe sécurisée." />
+    <link rel="canonical" href="https://matikilou.com/" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Matik" />
+    <meta property="og:locale" content="fr_FR" />
+    <meta property="og:url" content="https://matikilou.com/" />
     <meta property="og:title" content="Matik - Location de Matériel" />
     <meta property="og:description" content="Matik : Faites louer le matériel qui dort chez vous ou à l'atelier. Contrat instantané et caution Stripe sécurisée." />
-    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://matikilou.com/pwa-512x512.png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="Matik — location de matériel entre particuliers et professionnels" />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Matik - Location de Matériel" />
+    <meta name="twitter:description" content="Matik : Faites louer le matériel qui dort chez vous ou à l'atelier. Contrat instantané et caution Stripe sécurisée." />
+    <meta name="twitter:image" content="https://matikilou.com/pwa-512x512.png" />
+
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- Polices : chargées une seule fois ici (le @import CSS a été retiré). -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+    <!-- Données structurées : identité de l'éditeur et du site -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://matikilou.com/#organization",
+            "name": "Matikilou",
+            "alternateName": "Matik",
+            "url": "https://matikilou.com/",
+            "logo": "https://matikilou.com/pwa-512x512.png",
+            "email": "contact@matikilou.com",
+            "contactPoint": {
+              "@type": "ContactPoint",
+              "contactType": "customer support",
+              "email": "contact@matikilou.com",
+              "availableLanguage": ["fr"]
+            }
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://matikilou.com/#website",
+            "url": "https://matikilou.com/",
+            "name": "Matik",
+            "inLanguage": "fr-FR",
+            "publisher": { "@id": "https://matikilou.com/#organization" }
+          }
+        ]
+      }
+    </script>
   </head>
   <body class="bg-[#F8FAFC] text-slate-900 antialiased selection:bg-amber-400 selection:text-slate-950 font-sans">
     <div id="root"></div>
