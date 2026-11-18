@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowDown, ArrowRight, ShieldCheck, Plus } from 'lucide-react';
-import heroUniversalImage from '../assets/images/hero_equipment_universal_1793131513238.jpg';
+import heroUniversalImage from '../assets/images/hero_equipment_universal_1793131513238.webp';
+import heroUniversalImageSmall from '../assets/images/hero_equipment_universal_800.webp';
 import { EQUIPMENT_CATEGORIES } from '../data/equipment';
 import { CatalogFilters, EMPTY_CATALOG_FILTERS } from '../data/catalogFilters';
 import { SearchFilterBar } from './SearchFilterBar';
@@ -152,6 +153,10 @@ export const Hero: React.FC<HeroProps> = ({
               <div className="relative aspect-[4/3] sm:aspect-[16/10] lg:aspect-[4/3] w-full overflow-hidden bg-slate-100">
                 <img
                   src={heroUniversalImage}
+                  srcSet={`${heroUniversalImageSmall} 800w, ${heroUniversalImage} 1200w`}
+                  sizes="(min-width: 1024px) 42vw, 100vw"
+                  width={1200}
+                  height={896}
                   alt="Showroom de matériel professionnel et particulier : caméra cinéma, drone, système son et outillage"
                   referrerPolicy="no-referrer"
                   loading="eager"
