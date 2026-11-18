@@ -1067,6 +1067,23 @@ export default async function handler(req: any, res: any) {
     const admin = getSupabaseAdmin();
     const clientFullName = `${clientPrenom} ${clientNom}`.trim();
 
+    // ─── Identité de contact du loueur résolue CÔTÉ SERVEUR ───
+    // Les coordonnées envoyées par le navigateur ne sont jamais reprises telles
+    // quelles : un client pourrait sinon substituer un faux numéro/e-mail de
+    // loueur dans la réservation, puis dans le contrat PDF envoyé aux deux parties.
+    let ownerEmail = '';
+    let ownerPhone = '';
+    if (equipment.owner_id) {
+      try {
+        const { data: ownerUser } = await admin.auth.admin.getUserById(equipment.owner_id);
+        const ownerMeta: Record<string, any> = ownerUser?.user?.user_metadata || {};
+        ownerEmail = String(ownerUser?.user?.email || ownerMeta.email || '').trim();
+        ownerPhone = String(ownerMeta.phone || ownerUser?.user?.phone || '').trim();
+      } catch (err: any) {
+        console.warn('[Booking] Identité du loueur non résolue :', err?.message || err);
+      }
+    }
+
     const { error: insertError } = await admin.from('bookings').insert({
       id: bookingId,
       booking_reference: bookingId,
@@ -1080,8 +1097,8 @@ export default async function handler(req: any, res: any) {
       client_email: user.email,
       client_phone: String(body.clientTelephone || '').trim(),
       owner_name: String(body.loueurNom || body.artisanNom || '').trim() || null,
-      owner_email: String(body.loueurEmail || '').trim() || null,
-      owner_phone: String(body.loueurTelephone || '').trim() || null,
+      owner_email: ownerEmail || null,
+      owner_phone: ownerPhone || null,
       start_date: pricing.startDate,
       end_date: pricing.endDate,
       days: pricing.days,
@@ -1111,8 +1128,8 @@ export default async function handler(req: any, res: any) {
       clientEmail: user.email,
       clientTelephone: String(body.clientTelephone || '').trim(),
       loueurNom: String(body.loueurNom || body.artisanNom || '').trim(),
-      loueurEmail: String(body.loueurEmail || '').trim(),
-      loueurTelephone: String(body.loueurTelephone || '').trim(),
+      loueurEmail: ownerEmail,
+      loueurTelephone: ownerPhone,
       equipmentName: equipment.title || '',
       equipmentCategory: equipment.category || '',
       equipmentId: equipment.id,
@@ -1164,9 +1181,9 @@ export default async function handler(req: any, res: any) {
         console.warn('⚠️ [Stripe Connect] Impossible de lire le compte Connect du loueur :', err?.message || err);
       }
     }
-    if (!loueurStripeAccountId && typeof body.loueurStripeAccountId === 'string' && body.loueurStripeAccountId.startsWith('acct_')) {
-      loueurStripeAccountId = body.loueurStripeAccountId.trim();
-    }
+    // Le compte Connect du loueur provient EXCLUSIVEMENT de ses métadonnées Supabase.
+    // Ne jamais accepter `body.loueurStripeAccountId` : le navigateur pourrait
+    // y glisser le compte d'un tiers et détourner le virement de la location.
 
     const stripeData: StripeHoldData = {
       bookingId,
