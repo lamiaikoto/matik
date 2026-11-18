@@ -3,6 +3,7 @@ import { Equipment, CurrentUser } from '../types';
 import { EQUIPMENT_CATEGORIES } from '../data/equipment';
 import { FRENCH_REGIONS } from '../data/regions';
 import { generateUUID, isValidUUID } from '../lib/equipmentService';
+import { prepareEquipmentImage } from '../lib/imageStorage';
 import { buildPublicDisplayNameSuggestion } from '../lib/publicIdentity';
 import {
   X,
@@ -203,6 +204,7 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
 
   // Photos - Vierge au départ
   const [image, setImage] = useState<string>('');
+  const [imageProcessing, setImageProcessing] = useState<boolean>(false);
   const [customImageUrl, setCustomImageUrl] = useState('');
   const [photoSourceMode, setPhotoSourceMode] = useState<'upload' | 'preset' | 'url'>('upload');
 
@@ -280,8 +282,8 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Handle local image upload via file reader
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle local image upload: compression navigateur puis upload Storage
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -295,16 +297,20 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      if (result) {
-        setImage(result);
-        setCustomImageUrl('');
-        setFormError(null);
-      }
-    };
-    reader.readAsDataURL(file);
+    setImageProcessing(true);
+    setFormError(null);
+
+    try {
+      const prepared = await prepareEquipmentImage(file, currentUser?.id);
+      setImage(prepared.url);
+      setCustomImageUrl('');
+    } catch (err: any) {
+      setFormError(err?.message || "Impossible de traiter cette image.");
+    } finally {
+      setImageProcessing(false);
+      // Permet de re-sélectionner le même fichier après une erreur.
+      e.target.value = '';
+    }
   };
 
   // Smart caution multipliers
@@ -1088,8 +1094,14 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
                   {photoSourceMode === 'upload' && (
                     <div className="space-y-4">
                       <div
-                        onClick={() => fileInputRef.current?.click()}
-                        className="border-2 border-dashed border-slate-300 hover:border-amber-400 bg-slate-50 hover:bg-amber-50/30 rounded-2xl p-6 text-center transition-all cursor-pointer space-y-3"
+                        onClick={() => {
+                          if (!imageProcessing) fileInputRef.current?.click();
+                        }}
+                        className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all space-y-3 ${
+                          imageProcessing
+                            ? 'border-amber-300 bg-amber-50/40 cursor-wait'
+                            : 'border-slate-300 hover:border-amber-400 bg-slate-50 hover:bg-amber-50/30 cursor-pointer'
+                        }`}
                       >
                         <input
                           ref={fileInputRef}
@@ -1099,14 +1111,16 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
                           className="hidden"
                         />
                         <div className="w-12 h-12 mx-auto rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-amber-600 shadow-xs">
-                          <Upload className="w-6 h-6" />
+                          <Upload className={`w-6 h-6 ${imageProcessing ? 'animate-pulse' : ''}`} />
                         </div>
                         <div>
                           <p className="text-xs font-bold text-slate-900">
-                            Cliquez pour choisir une photo ou glissez-déposez ici
+                            {imageProcessing
+                              ? 'Compression et envoi de la photo…'
+                              : 'Cliquez pour choisir une photo ou glissez-déposez ici'}
                           </p>
                           <p className="text-[11px] text-slate-500 mt-1">
-                            Format JPG, PNG ou WebP (max 5 Mo). Photo nette recommandée.
+                            Format JPG, PNG ou WebP (max 5 Mo). Redimensionnée à 1600 px avant envoi.
                           </p>
                         </div>
                       </div>
