@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { ArrowLeft, FileText, Lock, ShieldCheck } from 'lucide-react';
-import { LEGAL_ENTITY } from '../data/legal';
+import { LEGAL_ENTITY, LEGAL_FIELD_LABELS, MISSING_LEGAL_FIELDS, type LegalFieldKey } from '../data/legal';
 
 export type LegalPageType = 'mentions-legales' | 'cgu' | 'confidentialite';
 
@@ -22,12 +22,32 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
   </section>
 );
 
-const Warning: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs leading-relaxed">
-    <strong className="font-bold">À compléter avant mise en production : </strong>
-    {children}
-  </div>
-);
+/**
+ * Bandeau d'avertissement affiché UNIQUEMENT si des informations légales
+ * obligatoires sont encore manquantes. Il se retire tout seul dès que les
+ * variables d'environnement VITE_LEGAL_* sont renseignées.
+ */
+const CompletionNotice: React.FC<{ fields: LegalFieldKey[] }> = ({ fields }) => {
+  if (fields.length === 0) return null;
+  return (
+    <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs leading-relaxed">
+      <strong className="font-bold">Informations à compléter avant mise en production :</strong>
+      <ul className="list-disc pl-4 mt-1.5 space-y-0.5">
+        {fields.map((key) => (
+          <li key={key}>{LEGAL_FIELD_LABELS[key]}</li>
+        ))}
+      </ul>
+      <p className="mt-1.5">
+        Ces champs sont obligatoires (LCEN art. 6-III, Code de la consommation art. L612-1). Les
+        valeurs restent visibles en l'état sur le site public.
+      </p>
+    </div>
+  );
+};
+
+/** Filtre les champs incomplets pertinents pour une page donnée. */
+const missingFields = (keys: LegalFieldKey[]): LegalFieldKey[] =>
+  keys.filter((key) => MISSING_LEGAL_FIELDS.includes(key));
 
 const EditorIdentity: React.FC = () => (
   <ul className="space-y-1.5">
@@ -65,11 +85,17 @@ const EditorIdentity: React.FC = () => (
 
 const MentionsLegales: React.FC = () => (
   <div className="space-y-8">
-    <Warning>
-      les informations d'immatriculation de l'éditeur (forme juridique, capital, siège, SIRET, RCS, TVA,
-      directeur de la publication) sont des emplacements réservés. Elles doivent être remplacées par les
-      données réelles de la société avant l'ouverture commerciale du site.
-    </Warning>
+    <CompletionNotice
+      fields={missingFields([
+        'legalForm',
+        'capital',
+        'address',
+        'siret',
+        'rcs',
+        'vat',
+        'publicationDirector',
+      ])}
+    />
 
     <Section title="1. Éditeur du site">
       <p>
@@ -157,10 +183,7 @@ const MentionsLegales: React.FC = () => (
 
 const CGU: React.FC = () => (
   <div className="space-y-8">
-    <Warning>
-      la clause de médiation de la consommation et les informations relatives à l'éditeur doivent être
-      complétées avec les coordonnées réelles du médiateur et de la société.
-    </Warning>
+    <CompletionNotice fields={missingFields(['mediator', 'address'])} />
 
     <Section title="1. Objet">
       <p>
@@ -318,10 +341,7 @@ const CGU: React.FC = () => (
 
 const Confidentialite: React.FC = () => (
   <div className="space-y-8">
-    <Warning>
-      le nom et les coordonnées du délégué à la protection des données (DPO), ainsi que les durées de
-      conservation définitives, doivent être validés avec le conseil juridique de la société.
-    </Warning>
+    <CompletionNotice fields={missingFields(['address'])} />
 
     <Section title="1. Responsable du traitement">
       <p>

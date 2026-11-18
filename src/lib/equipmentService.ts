@@ -46,8 +46,9 @@ interface EquipmentMetadata {
   tags?: string[];
   ownerType?: 'pro' | 'particulier';
   ownerName?: string;
-  ownerEmail?: string;
-  ownerPhone?: string;
+  // ⚠️ Les coordonnées du loueur (e-mail, téléphone) ne sont plus JAMAIS stockées
+  // ici : la colonne `description` d'`equipments` est lisible publiquement.
+  // Elles sont résolues côté serveur au moment de la réservation (api/booking.ts).
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -142,8 +143,10 @@ export const mapSupabaseRowToEquipment = (row: SupabaseEquipmentRow): Equipment 
     ownerType: metadata.ownerType || 'particulier',
     ownerId: row.owner_id || undefined,
     ownerName: metadata.ownerName || metadata.partnerArtisan || '',
-    ownerEmail: metadata.ownerEmail || '',
-    ownerPhone: metadata.ownerPhone || '',
+    // Coordonnées volontairement vides : elles ne transitent plus par une table
+    // publique. Le serveur les récupère depuis `auth.users` à la réservation.
+    ownerEmail: '',
+    ownerPhone: '',
     createdAt: row.created_at || new Date().toISOString(),
   };
 };
@@ -242,8 +245,6 @@ export const saveEquipmentToSupabase = async (
       tags: equipment.tags || [],
       ownerType: equipment.ownerType || 'particulier',
       ownerName: equipment.ownerName || equipment.partnerArtisan || '',
-      ownerEmail: equipment.ownerEmail || '',
-      ownerPhone: equipment.ownerPhone || '',
     };
 
     const finalDescription = encodeDescriptionWithMetadata(equipment.description, metadata);
