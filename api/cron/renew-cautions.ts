@@ -5,6 +5,26 @@ export const config = {
   maxDuration: 60, // 60s timeout for cron executions
 };
 
+const DEFAULT_SUPABASE_URL = 'https://inozsbkfcbkwlrozdvjj.supabase.co';
+
+/**
+ * Client Supabase en service_role — indispensable pour écrire dans `bookings`
+ * alors que la RLS est active. Aucun repli sur la clé anon : une écriture
+ * silencieusement rejetée par la RLS est plus dangereuse qu'une absence de client.
+ */
+const getSupabaseAdminForCron = () => {
+  const url = (
+    process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    DEFAULT_SUPABASE_URL
+  ).trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) return null;
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+};
+
 interface RenewalResult {
   bookingId?: string;
   oldPaymentIntentId: string;
@@ -44,19 +64,25 @@ export default async function handler(req: any, res: any) {
 
   // 1. Vérification de sécurité CRON_SECRET (envoyé par Vercel Cron dans Authorization: Bearer <CRON_SECRET>)
   const authHeader = req.headers?.authorization || req.headers?.Authorization || '';
-  const cronSecret = process.env.CRON_SECRET;
+  const cronSecret = (process.env.CRON_SECRET || '').trim();
 
-  if (cronSecret && cronSecret.trim()) {
-    const expectedHeader = `Bearer ${cronSecret.trim()}`;
-    if (authHeader !== expectedHeader) {
-      console.warn('⛔ [Cron Renew Cautions] Tentative non autorisée : CRON_SECRET invalide ou absent.');
-      return res.status(401).json({
-        success: false,
-        error: 'Non autorisé : jeton CRON_SECRET manquant ou invalide.',
-      });
-    }
-  } else {
-    console.log('ℹ️ [Cron Renew Cautions] CRON_SECRET non configuré dans l\'environnement — exécution autorisée.');
+  // Sans secret configuré, cet endpoint serait déclenchable par n'importe qui :
+  // appels Stripe facturés et annulations d'empreintes bancaires en série.
+  // On refuse explicitement au lieu de laisser la route ouverte.
+  if (!cronSecret) {
+    console.error('⛔ [Cron Renew Cautions] CRON_SECRET absent : exécution refusée.');
+    return res.status(503).json({
+      success: false,
+      error: 'CRON_SECRET non configuré : définissez la variable sur Vercel.',
+    });
+  }
+
+  if (authHeader !== `Bearer ${cronSecret}`) {
+    console.warn('⛔ [Cron Renew Cautions] Tentative non autorisée : CRON_SECRET invalide ou absent.');
+    return res.status(401).json({
+      success: false,
+      error: 'Non autorisé : jeton CRON_SECRET manquant ou invalide.',
+    });
   }
 
   // 2. Initialisation Stripe
@@ -234,22 +260,36 @@ export default async function handler(req: any, res: any) {
             amount: newPi.amount / 100,
           });
 
-          // Tentative de synchronisation dans Supabase si table 'bookings' existante
+          // Synchronisation en base (service_role obligatoire à cause de la RLS)
           try {
-            const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-            const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-            if (supabaseUrl && supabaseKey) {
-              const supabase = createClient(supabaseUrl, supabaseKey);
-              await supabase
+            const supabase = getSupabaseAdminForCron();
+            if (!supabase) {
+              console.warn(
+                '⚠️ [Cron] SUPABASE_SERVICE_ROLE_KEY absente : renouvellement non synchronisé en base.'
+              );
+            } else {
+              const { error: syncError } = await supabase
                 .from('bookings')
                 .update({
-                  stripe_caution_payment_intent_id: newPi.id,
+                  stripe_caution_intent_id: newPi.id,
                   caution_authorized_at: newAuthDate,
+                  last_caution_renewal_at: newAuthDate,
+                  renewal_count: renewalCount,
                   caution_renewal_failed: false,
+                  caution_renewal_error: null,
                 })
                 .eq('id', bookingId);
+
+              if (syncError) {
+                console.error(
+                  `❌ [Cron] Synchronisation Supabase impossible pour ${bookingId} :`,
+                  syncError.message
+                );
+              }
             }
-          } catch {}
+          } catch (syncErr: any) {
+            console.error(`❌ [Cron] Exception Supabase pour ${bookingId} :`, syncErr?.message || syncErr);
+          }
         } else {
           throw new Error(`Statut Stripe inattendu (${newPi.status}), confirmation off-session requise`);
         }
@@ -274,21 +314,31 @@ export default async function handler(req: any, res: any) {
           error: errMsg,
         });
 
-        // Tentative de marquage d'erreur dans Supabase
+        // Marquage de l'erreur en base (service_role obligatoire)
         try {
-          const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-          const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-          if (supabaseUrl && supabaseKey) {
-            const supabase = createClient(supabaseUrl, supabaseKey);
-            await supabase
+          const supabase = getSupabaseAdminForCron();
+          if (supabase) {
+            const { error: markError } = await supabase
               .from('bookings')
               .update({
                 caution_renewal_failed: true,
                 caution_renewal_error: errMsg,
               })
               .eq('id', bookingId);
+
+            if (markError) {
+              console.error(
+                `❌ [Cron] Erreur de caution non enregistrée pour ${bookingId} :`,
+                markError.message
+              );
+            }
           }
-        } catch {}
+        } catch (markErr: any) {
+          console.error(
+            `❌ [Cron] Exception lors du marquage d'erreur ${bookingId} :`,
+            markErr?.message || markErr
+          );
+        }
       }
     }
 
