@@ -1141,10 +1141,14 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                   ) : connectStatus?.hasAccount || currentUser?.stripeConnectAccountId ? (
                     <>
                       Votre compte Express a été créé mais nécessite des informations complémentaires (IBAN, identité) pour autoriser les virements automatiques de vos locations (90 % nets).
+                      <br />
+                      <strong className="text-amber-900">Tant que cette étape n'est pas terminée, vos annonces ne peuvent pas être réservées</strong> : la plateforme bloque la location, car Stripe ne peut pas encore vous verser le loyer.
                     </>
                   ) : (
                     <>
                       Liez votre compte bancaire pour recevoir automatiquement vos loyers par virement. La plateforme applique automatiquement la répartition : <strong className="text-slate-950">90 % pour vous</strong> et <strong className="text-slate-950">10 % de commission Matik</strong> lors de la validation d'une réservation.
+                      <br />
+                      <strong className="text-slate-950">Sans compte Stripe actif, vos annonces ne peuvent pas être réservées.</strong>
                     </>
                   )}
                 </p>

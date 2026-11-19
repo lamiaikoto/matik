@@ -518,6 +518,88 @@ async function getOrCreateStripeCustomer(
 }
 
 /**
+ * Message renvoyé au locataire lorsque le loueur n'est pas encore en mesure
+ * d'être payé. Volontairement explicite : le locataire doit comprendre qu'il
+ * n'a rien été débité, et le loueur ce qu'il lui reste à faire.
+ */
+const OWNER_STRIPE_NOT_READY_MESSAGE =
+  "Ce matériel ne peut pas être réservé pour le moment : le loueur n'a pas encore activé " +
+  "son compte de paiement Stripe. Aucun montant n'a été débité. " +
+  "Le loueur doit terminer sa configuration Stripe pour pouvoir recevoir des locations.";
+
+interface OwnerConnectState {
+  accountId: string | null;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+  /** `stripe` = info fraîche de l'API ; `metadata` = repli sur le webhook ; `none` = pas de compte. */
+  source: 'stripe' | 'metadata' | 'none';
+}
+
+/**
+ * Détermine si le loueur peut réellement encaisser une location.
+ *
+ * L'identifiant du compte vient des métadonnées Supabase (jamais du navigateur).
+ * L'état (`charges_enabled` / `payouts_enabled`) est lu en direct chez Stripe,
+ * car les métadonnées ne sont à jour qu'après réception de `account.updated` :
+ * un loueur qui vient de finir son onboarding pourrait sinon être bloqué à tort.
+ * Si Stripe est injoignable, on retombe sur les métadonnées synchronisées.
+ */
+async function readOwnerConnectState(ownerUserId?: string | null): Promise<OwnerConnectState> {
+  const unknown: OwnerConnectState = {
+    accountId: null,
+    chargesEnabled: false,
+    payoutsEnabled: false,
+    detailsSubmitted: false,
+    source: 'none',
+  };
+
+  if (!ownerUserId) return unknown;
+
+  let meta: Record<string, any> = {};
+  try {
+    const admin = getSupabaseAdmin();
+    const { data } = await admin.auth.admin.getUserById(ownerUserId);
+    meta = (data?.user?.user_metadata || {}) as Record<string, any>;
+  } catch (err: any) {
+    console.warn('[Stripe Connect] Métadonnées du loueur illisibles :', err?.message || err);
+    return unknown;
+  }
+
+  const rawId = typeof meta.stripe_connect_account_id === 'string' ? meta.stripe_connect_account_id.trim() : '';
+  const accountId = rawId.startsWith('acct_') ? rawId : null;
+  if (!accountId) return unknown;
+
+  const secretKey = (process.env.STRIPE_SECRET_KEY || '').trim();
+  if (secretKey) {
+    try {
+      const stripe = new Stripe(secretKey, { apiVersion: '2024-11-20.acacia' } as any);
+      const account = await stripe.accounts.retrieve(accountId);
+      return {
+        accountId,
+        chargesEnabled: !!account.charges_enabled,
+        payoutsEnabled: !!account.payouts_enabled,
+        detailsSubmitted: !!account.details_submitted,
+        source: 'stripe',
+      };
+    } catch (err: any) {
+      console.warn(
+        '[Stripe Connect] Lecture du compte impossible — repli sur les métadonnées :',
+        err?.message || err
+      );
+    }
+  }
+
+  return {
+    accountId,
+    chargesEnabled: meta.stripe_connect_charges_enabled === true,
+    payoutsEnabled: meta.stripe_connect_payouts_enabled === true,
+    detailsSubmitted: meta.stripe_connect_details_submitted === true,
+    source: 'metadata',
+  };
+}
+
+/**
  * Crée une session Stripe Checkout pour l'encaissement réel des frais de location.
  *
  * - mode: 'payment' avec capture_method: 'automatic' (débit immédiat)
@@ -589,7 +671,13 @@ async function createStripePaymentSession(data: StripeHoldData, customerId?: str
       paymentIntentData.transfer_data = { destination: data.loueurStripeAccountId as string };
       console.log(`💸 [Stripe Payment] Transfer Connect vers ${data.loueurStripeAccountId}, commission = ${(applicationFeeCents / 100).toFixed(2)} €`);
     } else {
-      console.log('ℹ️ [Stripe Payment] Pas de compte Connect loueur — paiement encaissé sur compte Matik principal.');
+      // Ne jamais encaisser sur le compte Matik principal à la place du loueur :
+      // le loyer serait perdu pour lui, et rien ne le signalerait au locataire.
+      // Le blocage en amont (OWNER_STRIPE_NOT_READY) doit déjà l'empêcher ;
+      // cette garde couvre un appel direct ou une métadonnée modifiée entre-temps.
+      throw new Error(
+        "Le loueur n'a pas de compte Stripe Connect actif : le paiement ne peut pas lui être versé."
+      );
     }
 
     // expires_at : 45 min dans le futur (> 30 min min Stripe, marge pour clock skew)
@@ -1059,6 +1147,33 @@ export default async function handler(req: any, res: any) {
         `+ ${pricing.serviceFee} € (frais) = ${pricing.total} € — caution ${pricing.caution} €`
     );
 
+    // ─── 2 bis. LE LOUEUR DOIT POUVOIR ENCAISSER AVANT TOUT PAIEMENT ───
+    // Sans compte Connect actif, Stripe refuse le transfert : l'argent
+    // resterait bloqué sur le compte Matik et le loueur ne serait jamais payé.
+    // On vérifie donc AVANT d'écrire la réservation, pour ne laisser aucune
+    // ligne orpheline en base si le blocage se déclenche.
+    const ownerConnect = await readOwnerConnectState(equipment.owner_id);
+    const stripeConfigured = !!(process.env.STRIPE_SECRET_KEY || '').trim();
+
+    if (!stripeConfigured) {
+      // Environnement sans Stripe (dev local) : le paiement est déjà neutralisé
+      // plus bas, inutile de bloquer la réservation.
+      console.warn('[Stripe Connect] STRIPE_SECRET_KEY absente — contrôle du compte loueur ignoré.');
+    } else if (!ownerConnect.chargesEnabled || !ownerConnect.payoutsEnabled) {
+      console.warn(
+        `🚫 [Stripe Connect] Location refusée — loueur ${equipment.owner_id} : ` +
+          `compte=${ownerConnect.accountId || 'aucun'}, encaissement=${ownerConnect.chargesEnabled}, ` +
+          `virements=${ownerConnect.payoutsEnabled}, source=${ownerConnect.source}`
+      );
+      throw new ApiError(409, 'OWNER_STRIPE_NOT_READY', OWNER_STRIPE_NOT_READY_MESSAGE, {
+        reason: 'owner_stripe_not_ready',
+        accountId: ownerConnect.accountId,
+        chargesEnabled: ownerConnect.chargesEnabled,
+        payoutsEnabled: ownerConnect.payoutsEnabled,
+        detailsSubmitted: ownerConnect.detailsSubmitted,
+      });
+    }
+
     const bookingId = `MAT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
     console.log(`🏷️ Référence générée : ${bookingId}`);
 
@@ -1167,23 +1282,16 @@ export default async function handler(req: any, res: any) {
     }
     const appUrl = process.env.APP_URL || fallbackAppUrl;
 
-    // Récupération serveur sécurisée du compte Stripe Connect du loueur depuis ses métadonnées Supabase
-    let loueurStripeAccountId: string | undefined;
-    if (equipment.owner_id) {
-      try {
-        const { data: ownerUser } = await admin.auth.admin.getUserById(equipment.owner_id);
-        const connectId = ownerUser?.user?.user_metadata?.stripe_connect_account_id;
-        if (connectId && typeof connectId === 'string' && connectId.startsWith('acct_')) {
-          loueurStripeAccountId = connectId.trim();
-          console.log(`🏦 [Stripe Connect] Compte loueur trouvé en base pour ${equipment.owner_id} : ${loueurStripeAccountId}`);
-        }
-      } catch (err: any) {
-        console.warn('⚠️ [Stripe Connect] Impossible de lire le compte Connect du loueur :', err?.message || err);
-      }
-    }
-    // Le compte Connect du loueur provient EXCLUSIVEMENT de ses métadonnées Supabase.
+    // Compte Connect du loueur : résolu une seule fois, plus haut
+    // (readOwnerConnectState), depuis ses métadonnées Supabase et vérifié chez Stripe.
     // Ne jamais accepter `body.loueurStripeAccountId` : le navigateur pourrait
     // y glisser le compte d'un tiers et détourner le virement de la location.
+    const loueurStripeAccountId = ownerConnect.accountId || undefined;
+    if (loueurStripeAccountId) {
+      console.log(
+        `🏦 [Stripe Connect] Virement vers le loueur ${equipment.owner_id} : ${loueurStripeAccountId}`
+      );
+    }
 
     const stripeData: StripeHoldData = {
       bookingId,
@@ -1203,6 +1311,22 @@ export default async function handler(req: any, res: any) {
 
     console.log('💳 [Stripe] Initialisation des sessions Stripe (Paiement réel + Caution)...');
     const stripeSessions = await createStripeCheckoutSessions(stripeData);
+
+    // Aucune session de paiement = aucun encaissement possible. On annule la
+    // réservation plutôt que de renvoyer un succès trompeur au locataire.
+    if (!stripeSessions.payment.success) {
+      console.error('❌ [Stripe] Session de paiement non créée :', stripeSessions.payment.error);
+      if (insertedFresh) {
+        await admin.from('bookings').delete().eq('id', bookingId).eq('status', 'pending_payment');
+      }
+      throw new ApiError(
+        502,
+        'PAYMENT_SESSION_FAILED',
+        "Le paiement n'a pas pu être initialisé. Aucun montant n'a été débité. " +
+          'Réessayez dans quelques instants.',
+        { stripeError: stripeSessions.payment.error || null }
+      );
+    }
 
     // 6. Enregistrement des identifiants Stripe côté base (le webhook fera foi)
     const stripePatch: Record<string, unknown> = {};
