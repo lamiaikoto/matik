@@ -96,6 +96,7 @@ export const Catalog: React.FC<CatalogProps> = ({
   const filteredEquipment = useMemo(() => {
     const keyword = normalizeText(filters.keyword);
     const location = normalizeText(filters.location);
+    const radius = filters.radius || 'all';
 
     return activeEquipments.filter((item) => {
       if (filters.category !== 'Tous' && item.category !== filters.category) {
@@ -112,10 +113,35 @@ export const Catalog: React.FC<CatalogProps> = ({
       }
 
       if (location) {
-        const locationHaystack = normalizeText(
-          `${item.city || ''} ${item.postalCode || ''} ${item.region || ''}`
-        );
-        if (!locationHaystack.includes(location)) return false;
+        const itemCity = normalizeText(item.city || '');
+        const itemPostalCode = (item.postalCode || '').trim();
+        const itemRegion = normalizeText(item.region || '');
+        const locationHaystack = normalizeText(`${itemCity} ${itemPostalCode} ${itemRegion}`);
+
+        const digits = location.replace(/\D/g, '');
+
+        if (radius === 'exact') {
+          if (digits.length >= 4) {
+            if (itemPostalCode !== digits && !itemCity.includes(location)) return false;
+          } else {
+            if (!itemCity.includes(location) && !itemPostalCode.startsWith(digits)) return false;
+          }
+        } else if (radius === 'dept') {
+          const dept = digits.length >= 2 ? digits.slice(0, 2) : '';
+          const itemDept = itemPostalCode.length >= 2 ? itemPostalCode.slice(0, 2) : '';
+
+          if (dept && itemDept) {
+            if (itemDept !== dept && !locationHaystack.includes(location)) return false;
+          } else {
+            if (!locationHaystack.includes(location)) return false;
+          }
+        } else {
+          const dept = digits.length >= 2 ? digits.slice(0, 2) : '';
+          const itemDept = itemPostalCode.length >= 2 ? itemPostalCode.slice(0, 2) : '';
+          const matchesDept = Boolean(dept && itemDept && itemDept === dept);
+
+          if (!locationHaystack.includes(location) && !matchesDept) return false;
+        }
       }
 
       return true;
@@ -350,7 +376,7 @@ export const Catalog: React.FC<CatalogProps> = ({
                           {item.city && (
                             <span
                               className="inline-flex items-center gap-1 text-slate-600 max-w-full"
-                              title={[item.city, item.postalCode].filter(Boolean).join(' ')}
+                              title={`Zone approximative : ${[item.city, item.postalCode].filter(Boolean).join(' ')}. Lieu précis convenu après paiement.`}
                             >
                               <MapPin className="w-3 h-3 text-amber-500 shrink-0" />
                               <span className="truncate">

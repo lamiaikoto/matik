@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Equipment, LoueurProProfile, LoueurParticulierProfile, ClientProfile, CurrentUser, BookingRecord } from '../types';
 import { CounterpartContactCard } from './CounterpartContactCard';
+import { BookingMessages } from './BookingMessages';
 import { isEquipmentRented } from '../utils/availability';
+import { maskEmail, anonymizeFullName, buildPublicDisplayNameSuggestion } from '../lib/publicIdentity';
 import {
   Building2,
   Plus,
@@ -94,9 +96,9 @@ interface FloatingInputProps {
   placeholder?: string;
   helperText?: string;
   errorMessage?: string;
-  isValid: boolean;
-  isTouched: boolean;
-  onBlur: () => void;
+  isValid?: boolean;
+  isTouched?: boolean;
+  onBlur?: () => void;
   badge?: string;
   autoComplete?: string;
 }
@@ -112,8 +114,8 @@ const EnterpriseFloatingInput: React.FC<FloatingInputProps> = ({
   placeholder = '',
   helperText,
   errorMessage,
-  isValid,
-  isTouched,
+  isValid = true,
+  isTouched = false,
   onBlur,
   badge,
   autoComplete,
@@ -163,7 +165,7 @@ const EnterpriseFloatingInput: React.FC<FloatingInputProps> = ({
           onFocus={() => setIsFocused(true)}
           onBlur={() => {
             setIsFocused(false);
-            onBlur();
+            onBlur?.();
           }}
           autoComplete={autoComplete}
           required={required}
@@ -270,6 +272,9 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
   const [saveSuccessToast, setSaveSuccessToast] = useState(false);
 
   // Pro Form Fields
+  const [proDisplayName, setProDisplayName] = useState<string>(
+    currentUser?.displayName || (currentUser && 'companyName' in currentUser ? currentUser.companyName : '')
+  );
   const [proCompanyName, setProCompanyName] = useState<string>(
     currentUser && 'companyName' in currentUser ? currentUser.companyName : ''
   );
@@ -290,6 +295,9 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
   );
 
   // Particulier Form Fields
+  const [particulierDisplayName, setParticulierDisplayName] = useState<string>(
+    currentUser?.displayName || (currentUser ? buildPublicDisplayNameSuggestion(currentUser) : '')
+  );
   const [particulierPrenom, setParticulierPrenom] = useState<string>(
     currentUser && 'prenom' in currentUser ? currentUser.prenom || '' : ''
   );
@@ -318,6 +326,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
     if (currentUser) {
       if (currentUser.role === 'loueur_pro') {
         setProfileRole('loueur_pro');
+        setProDisplayName(currentUser.displayName || currentUser.companyName || '');
         setProCompanyName(currentUser.companyName || '');
         setProSiret(currentUser.siret || '');
         setProName(currentUser.name || '');
@@ -326,6 +335,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
         setProCity(currentUser.city || '');
       } else if (currentUser.role === 'loueur_particulier') {
         setProfileRole('loueur_particulier');
+        setParticulierDisplayName(currentUser.displayName || buildPublicDisplayNameSuggestion(currentUser) || '');
         setParticulierPrenom(currentUser.prenom || '');
         setParticulierNom(currentUser.nom || '');
         setParticulierEmail(currentUser.email || '');
@@ -471,6 +481,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
       const updatedUser: LoueurProProfile = {
         id: currentUser?.id || `pro-${Date.now()}`,
         role: 'loueur_pro',
+        displayName: proDisplayName.trim() || undefined,
         companyName: proCompanyName.trim(),
         siret: proSiret.trim(),
         name: proName.trim(),
@@ -495,6 +506,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
       const updatedUser: LoueurParticulierProfile = {
         id: currentUser?.id || `part-${Date.now()}`,
         role: 'loueur_particulier',
+        displayName: particulierDisplayName.trim() || undefined,
         prenom: particulierPrenom.trim(),
         nom: particulierNom.trim(),
         email: particulierEmail.trim(),
@@ -698,6 +710,16 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                   {/* Inputs Grid with floating labels & enterprise spacing */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                     <EnterpriseFloatingInput
+                      id="proDisplayName"
+                      label="Nom public affiché / Enseigne"
+                      value={proDisplayName}
+                      onChange={setProDisplayName}
+                      icon={<User className="w-4 h-4" />}
+                      placeholder="Ex: Atelier BTP Moreau"
+                      helperText="Nom ou enseigne public visible sur les annonces et menus"
+                    />
+
+                    <EnterpriseFloatingInput
                       id="proCompanyName"
                       label="Raison sociale ou Atelier"
                       value={proCompanyName}
@@ -810,8 +832,18 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                   {/* Inputs Grid with floating labels & enterprise spacing */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                     <EnterpriseFloatingInput
+                      id="particulierDisplayName"
+                      label="Pseudo / Nom affiché public"
+                      value={particulierDisplayName}
+                      onChange={setParticulierDisplayName}
+                      icon={<User className="w-4 h-4" />}
+                      placeholder="Ex: Maxime R. ou BricoMax"
+                      helperText="Seul identifiant public visible sur vos annonces et échanges (vos vrais contacts restent privés)"
+                    />
+
+                    <EnterpriseFloatingInput
                       id="particulierPrenom"
-                      label="Prénom"
+                      label="Prénom (civil privé)"
                       value={particulierPrenom}
                       onChange={setParticulierPrenom}
                       icon={<User className="w-4 h-4" />}
@@ -964,13 +996,19 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                 )}
               </div>
 
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">
-                {isParticulier && currentUser
-                  ? `${currentUser.prenom} ${currentUser.nom}`
-                  : currentUser && 'companyName' in currentUser
-                  ? currentUser.companyName
-                  : 'Atelier & Matériel'}
-              </h1>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">
+                  {currentUser?.displayName ||
+                    (isParticulier && currentUser
+                      ? anonymizeFullName(`${currentUser.prenom} ${currentUser.nom}`)
+                      : currentUser && 'companyName' in currentUser
+                      ? currentUser.companyName
+                      : 'Atelier & Matériel')}
+                </h1>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-200 uppercase tracking-wide">
+                  Identifiant public
+                </span>
+              </div>
 
               {/* Profile Details Strip */}
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-600">
@@ -984,8 +1022,8 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                 )}
 
                 <span>
-                  Contact :{' '}
-                  <strong className="text-slate-950 font-bold">
+                  Nom civil (privé) :{' '}
+                  <strong className="text-slate-800 font-medium">
                     {isParticulier && currentUser
                       ? `${currentUser.prenom} ${currentUser.nom}`
                       : currentUser && 'name' in currentUser
@@ -997,30 +1035,35 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                 <span className="text-slate-300">·</span>
 
                 <span>
-                  Email :{' '}
-                  <strong className="text-slate-950 font-bold">
-                    {currentUser?.email || '-'}
+                  Email (protégé) :{' '}
+                  <strong className="text-slate-800 font-mono text-[11px]">
+                    {currentUser?.email ? maskEmail(currentUser.email) : '-'}
                   </strong>
                 </span>
 
                 <span className="text-slate-300">·</span>
 
                 <span>
-                  Téléphone :{' '}
-                  <strong className="text-slate-950 font-bold">
-                    {currentUser?.phone || '-'}
+                  Téléphone (protégé) :{' '}
+                  <strong className="text-slate-800 font-mono text-[11px]">
+                    {currentUser?.phone ? `${currentUser.phone.slice(0, 4)}••••••` : '-'}
                   </strong>
                 </span>
 
                 <span className="text-slate-300">·</span>
 
                 <span>
-                  Ville :{' '}
+                  Zone de remise :{' '}
                   <strong className="text-slate-950 font-bold">
                     {currentUser?.city || '-'}
                   </strong>
                 </span>
               </div>
+
+              <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Coordonnées directes et adresse protégées : seules les parties d’une réservation payée y ont accès.</span>
+              </p>
             </div>
 
             {/* Action Buttons: Modifier mon profil + Déconnexion + Déposer annonce */}
@@ -1712,6 +1755,10 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                   const isPendingPayment = booking.status === 'pending_payment';
                   const isRestitutionSignaled = booking.status === 'restitution_signalee';
                   const isTenant = currentUser?.role === 'client';
+                  // Mise en relation : coordonnées et messagerie débloquées uniquement
+                  // après confirmation du paiement par le webhook Stripe.
+                  const isPaymentUnlocked =
+                    Boolean(booking.paymentConfirmedAt) || !isPendingPayment;
 
                   return (
                     <div
@@ -1746,8 +1793,12 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                             <h4 className="text-sm font-extrabold text-slate-950">{booking.equipmentName}</h4>
                             <div className="text-xs text-slate-600 flex items-center gap-2 mt-0.5">
                               <span>Locataire : <strong className="text-slate-900">{booking.clientName}</strong></span>
-                              <span>·</span>
-                              <span>{booking.clientPhone}</span>
+                              {isPaymentUnlocked && booking.clientPhone && (
+                                <>
+                                  <span>·</span>
+                                  <span>{booking.clientPhone}</span>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1873,14 +1924,40 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                         </div>
                       )}
 
-                      {/* Système de mise en relation directe : Carte de la contrepartie (Appel & WhatsApp 1-clic) */}
-                      <CounterpartContactCard
-                        counterpartRole={currentUser?.role === 'client' ? 'loueur' : 'locataire'}
-                        name={currentUser?.role === 'client' ? (booking.ownerName || 'Loueur Matik') : booking.clientName}
-                        phone={currentUser?.role === 'client' ? (booking.ownerPhone || '') : (booking.clientPhone || '')}
-                        email={currentUser?.role === 'client' ? (booking.ownerEmail || '') : (booking.clientEmail || '')}
-                        equipmentName={booking.equipmentName}
-                      />
+                      {/* Mise en relation : coordonnées et messagerie après paiement uniquement */}
+                      {isPaymentUnlocked ? (
+                        <div className="space-y-3">
+                          <CounterpartContactCard
+                            counterpartRole={isTenant ? 'loueur' : 'locataire'}
+                            name={isTenant ? (booking.ownerName || 'Loueur Matik') : booking.clientName}
+                            phone={isTenant ? (booking.ownerPhone || '') : (booking.clientPhone || '')}
+                            email={isTenant ? (booking.ownerEmail || '') : (booking.clientEmail || '')}
+                            equipmentName={booking.equipmentName}
+                          />
+                          <BookingMessages
+                            bookingId={booking.id}
+                            enabled={isPaymentUnlocked}
+                            counterpartName={isTenant ? (booking.ownerName || 'votre loueur') : booking.clientName}
+                            currentUserRole={currentUser?.role}
+                          />
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3.5 flex items-start gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-slate-200 text-slate-600 flex items-center justify-center shrink-0">
+                            <Lock className="w-4 h-4" />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-xs font-extrabold text-slate-800">
+                              Coordonnées et messagerie verrouillées
+                            </p>
+                            <p className="text-[11px] leading-relaxed text-slate-600">
+                              Le nom, le téléphone, l&apos;e-mail de la contrepartie et le lieu de remise seront
+                              débloqués dès la confirmation du paiement de la location. Aucune coordonnée
+                              n&apos;est échangée avant cette étape.
+                            </p>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Action buttons row */}
                       <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">

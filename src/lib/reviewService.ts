@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { isValidUUID } from './equipmentService';
-import { mapSupabaseBookingToRecord, SupabaseBookingRow } from './bookingService';
+import { mapSupabaseBookingToRecord, SupabaseBookingRow, BOOKING_PUBLIC_COLUMNS } from './bookingService';
 import { BookingRecord, EquipmentReview } from '../types';
 
 /** Structure de la table public.reviews (supabase/migrations/01_bookings_and_reviews.sql) */
@@ -106,7 +106,7 @@ export const fetchCompletedBookingsForEquipment = async (
 
     const { data, error } = await supabase
       .from('bookings')
-      .select('*')
+      .select(BOOKING_PUBLIC_COLUMNS)
       .eq('equipment_id', equipmentId)
       .eq('locataire_id', userId)
       .eq('status', 'restitue')
@@ -117,7 +117,9 @@ export const fetchCompletedBookingsForEquipment = async (
       return [];
     }
 
-    return (data || []).map((row) => mapSupabaseBookingToRecord(row as SupabaseBookingRow));
+    return (data || []).map((row) =>
+      mapSupabaseBookingToRecord(row as unknown as SupabaseBookingRow)
+    );
   } catch (err) {
     console.error('[Supabase reviews] Exception fetchCompletedBookingsForEquipment :', err);
     return [];

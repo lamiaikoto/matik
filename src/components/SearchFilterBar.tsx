@@ -35,7 +35,7 @@ export const SearchFilterBar: React.FC<SearchFilterBarProps> = ({
   };
 
   const reset = () => {
-    onChange({ keyword: '', category: 'Tous', region: 'Toutes', location: '' });
+    onChange({ keyword: '', category: 'Tous', region: 'Toutes', location: '', radius: 'all' });
   };
 
   const isHero = variant === 'hero';
@@ -127,11 +127,14 @@ export const SearchFilterBar: React.FC<SearchFilterBarProps> = ({
           </select>
         </div>
 
-        {/* Ville ou code postal */}
+        {/* Ville ou code postal & zone approximative */}
         <div className={spanClass('location')}>
-          <label htmlFor={`catalogLocation-${variant}`} className={labelClass}>
-            Ville ou code postal
-          </label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label htmlFor={`catalogLocation-${variant}`} className={labelClass}>
+              Ville ou code postal
+            </label>
+            <span className="text-[10px] text-slate-400 font-medium">Zone approx.</span>
+          </div>
           <div className="relative">
             <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             <input
@@ -143,6 +146,21 @@ export const SearchFilterBar: React.FC<SearchFilterBarProps> = ({
               className={`${fieldClass} pl-9 pr-3`}
             />
           </div>
+          {filters.location.trim().length > 0 && (
+            <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-600">
+              <span className="text-[10px] font-bold text-slate-500 uppercase">Rayon :</span>
+              <select
+                id={`catalogRadius-${variant}`}
+                value={filters.radius || 'all'}
+                onChange={(e) => update({ radius: e.target.value as any })}
+                className="bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg px-2 py-0.5 text-[11px] text-slate-700 font-semibold cursor-pointer focus:outline-none focus:border-amber-500"
+              >
+                <option value="all">Tout le secteur</option>
+                <option value="dept">Rayon ~25 km (département)</option>
+                <option value="exact">Commune exacte</option>
+              </select>
+            </div>
+          )}
         </div>
       </div>
 

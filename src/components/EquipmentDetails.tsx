@@ -198,16 +198,21 @@ export const EquipmentDetails: React.FC<EquipmentDetailsProps> = ({
                         <strong className="text-slate-900">{publicDisplayName}</strong>
                       </div>
                       {(equipment.city || equipment.region) && (
-                        <div className="flex justify-between py-1 border-b border-slate-200 gap-3">
-                          <span>Localisation</span>
-                          <strong className="text-slate-900 flex items-center gap-1 text-right">
-                            <MapPin className="w-3 h-3 text-amber-500 shrink-0" />
-                            <span>
-                              {[equipment.city, equipment.postalCode ? `(${equipment.postalCode})` : '', equipment.region]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </span>
-                          </strong>
+                        <div className="py-1.5 border-b border-slate-200 space-y-1">
+                          <div className="flex justify-between items-center gap-3">
+                            <span>Zone de retrait (approx.)</span>
+                            <strong className="text-slate-900 flex items-center gap-1 text-right">
+                              <MapPin className="w-3 h-3 text-amber-500 shrink-0" />
+                              <span>
+                                {[equipment.city, equipment.postalCode ? `(${equipment.postalCode})` : '', equipment.region]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </span>
+                            </strong>
+                          </div>
+                          <p className="text-[10px] text-slate-400 leading-snug">
+                            Zone approximative · Adresse exacte et point de remise transmis après confirmation du paiement.
+                          </p>
                         </div>
                       )}
                       <div className="flex justify-between py-1">

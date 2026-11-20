@@ -31,6 +31,18 @@ const capitalize = (value: string): string =>
   value ? value[0].toLocaleUpperCase('fr-FR') + value.slice(1) : '';
 
 /**
+ * Masque une adresse e-mail pour éviter toute exposition en clair dans les menus ou interfaces :
+ * « jean.dupont@gmail.com » → « j***t@gmail.com »
+ */
+export const maskEmail = (email?: string | null): string => {
+  if (!email || !email.includes('@')) return '';
+  const [local, domain] = email.split('@');
+  if (!domain) return '';
+  if (local.length <= 2) return `${local[0]}*@${domain}`;
+  return `${local[0]}***${local[local.length - 1]}@${domain}`;
+};
+
+/**
  * Anonymise un nom complet en respectant la vie privée :
  * « Jean Dupont » → « Jean D. »
  * « Sheriff » → « Sheriff »
@@ -67,6 +79,11 @@ export const anonymizeFullName = (fullName?: string | null): string => {
  */
 export const buildPublicDisplayNameSuggestion = (user?: CurrentUser | null): string => {
   if (!user) return '';
+
+  if (user.displayName?.trim()) {
+    const cleaned = stripAccountNicknames(user.displayName);
+    if (cleaned) return cleaned;
+  }
 
   if (user.role === 'loueur_pro') {
     const company = stripAccountNicknames(user.companyName);

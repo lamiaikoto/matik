@@ -1,8 +1,11 @@
+export type LocationRadius = 'all' | 'exact' | 'dept' | 'region';
+
 export interface CatalogFilters {
   keyword: string;
   category: string;
   region: string;
   location: string;
+  radius?: LocationRadius;
 }
 
 export const EMPTY_CATALOG_FILTERS: CatalogFilters = {
@@ -10,6 +13,7 @@ export const EMPTY_CATALOG_FILTERS: CatalogFilters = {
   category: 'Tous',
   region: 'Toutes',
   location: '',
+  radius: 'all',
 };
 
 export const hasActiveCatalogFilters = (filters: CatalogFilters): boolean =>

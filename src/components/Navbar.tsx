@@ -19,6 +19,7 @@ import { MatikLogo } from './MatikLogo';
 import { LocaleSelector, LocaleSelectorMobile } from './LocaleSelector';
 import { useLocale } from '../context/LocaleContext';
 import { useTranslation } from 'react-i18next';
+import { maskEmail, anonymizeFullName } from '../lib/publicIdentity';
 
 interface NavbarProps {
   currentPage: PageType;
@@ -70,21 +71,22 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'garanties', label: t('nav.guarantees'), icon: ShieldCheck },
   ];
 
-  // Extraction propre et sans espace résiduel du nom d'affichage
+  // Extraction propre et sécurisée de l'identifiant public (pseudo ou nom anonymisé)
   const userDisplayName = (() => {
     if (!currentUser) return '';
+    if (currentUser.displayName?.trim()) {
+      return currentUser.displayName.trim();
+    }
     if (currentUser.role === 'loueur_pro') {
       return (currentUser.companyName || currentUser.name || '').trim();
     }
     if (currentUser.role === 'loueur_particulier') {
       const parts = [currentUser.prenom, currentUser.nom].filter(Boolean).join(' ').trim();
-      return parts || (currentUser.name || '').trim();
+      return anonymizeFullName(parts || currentUser.name) || 'Mon Compte';
     }
     const clientParts = [currentUser.prenom, currentUser.nom].filter(Boolean).join(' ').trim();
     return (
-      clientParts ||
-      (currentUser.name || '').trim() ||
-      (currentUser.email?.split('@')[0] || '').trim() ||
+      anonymizeFullName(clientParts || currentUser.name) ||
       'Mon Compte'
     );
   })();
@@ -202,7 +204,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                       </span>
                     </div>
                     {currentUser.email && (
-                      <div className="text-[11px] text-slate-500 truncate">{currentUser.email}</div>
+                      <div className="text-[11px] text-slate-400 truncate flex items-center gap-1.5" title="Email de compte protégé">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                        <span>Compte : {maskEmail(currentUser.email)}</span>
+                      </div>
                     )}
                   </div>
 
@@ -347,7 +352,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </span>
                 </div>
                 {currentUser.email && (
-                  <div className="text-[11px] text-slate-500 truncate">{currentUser.email}</div>
+                  <div className="text-[11px] text-slate-400 truncate flex items-center gap-1.5" title="Email de compte protégé">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                    <span>Compte : {maskEmail(currentUser.email)}</span>
+                  </div>
                 )}
                 <button
                   type="button"

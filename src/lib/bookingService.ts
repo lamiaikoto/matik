@@ -16,11 +16,11 @@ export interface SupabaseBookingRow {
   locataire_id: string;
   loueur_id: string | null;
   client_name: string;
-  client_email: string;
-  client_phone: string;
+  client_email?: string;
+  client_phone?: string;
   owner_name: string | null;
-  owner_email: string | null;
-  owner_phone: string | null;
+  owner_email?: string | null;
+  owner_phone?: string | null;
   start_date: string;
   end_date: string;
   days: number;
@@ -83,8 +83,77 @@ const toIsoDate = (value: string): string => {
   return value.includes('T') ? value.slice(0, 10) : value;
 };
 
+/**
+ * Colonnes de `bookings` lisibles par le navigateur.
+ *
+ * Les coordonnées (client_email, client_phone, owner_email, owner_phone) sont
+ * volontairement exclues : la migration 07 retire leur privilège SELECT pour
+ * les utilisateurs authentifiés. Elles ne sont accessibles qu'après paiement,
+ * via la fonction serveur `get_my_booking_contacts()`.
+ */
+export const BOOKING_PUBLIC_COLUMNS = [
+  'id',
+  'booking_reference',
+  'equipment_id',
+  'equipment_name',
+  'equipment_category',
+  'equipment_image',
+  'locataire_id',
+  'loueur_id',
+  'client_name',
+  'owner_name',
+  'start_date',
+  'end_date',
+  'days',
+  'subtotal',
+  'service_fee',
+  'total_price',
+  'caution_amount',
+  'status',
+  'restitution_signaled_at',
+  'stripe_caution_status',
+  'stripe_payment_intent_id',
+  'stripe_caution_intent_id',
+  'stripe_caution_session_id',
+  'stripe_caution_url',
+  'stripe_customer_id',
+  'stripe_payment_method_id',
+  'caution_authorized_at',
+  'caution_renewal_failed',
+  'caution_renewal_error',
+  'last_caution_renewal_at',
+  'renewal_count',
+  'dispute_reason',
+  'disputed_at',
+  'check_in_report',
+  'check_out_report',
+  'payment_confirmed_at',
+  'confirmation_email_sent_at',
+  'created_at',
+  'updated_at',
+].join(',');
+
+/** Coordonnées renvoyées par `get_my_booking_contacts()` (réservations payées). */
+export interface BookingContactsRow {
+  booking_id: string;
+  owner_name: string | null;
+  owner_email: string | null;
+  owner_phone: string | null;
+  client_name: string | null;
+  client_email: string | null;
+  client_phone: string | null;
+}
+
+type BookingContacts = Pick<
+  BookingContactsRow,
+  'owner_email' | 'owner_phone' | 'client_email' | 'client_phone'
+>;
+
 /** Convertit une ligne PostgreSQL en objet BookingRecord utilisé par l'interface. */
-export const mapSupabaseBookingToRecord = (row: SupabaseBookingRow): BookingRecord => ({
+export const mapSupabaseBookingToRecord = (
+  row: SupabaseBookingRow,
+  contacts?: BookingContacts | null
+): BookingRecord => ({
   id: row.id,
   bookingId: row.booking_reference || row.id,
   equipmentId: row.equipment_id || '',
@@ -93,13 +162,13 @@ export const mapSupabaseBookingToRecord = (row: SupabaseBookingRow): BookingReco
   equipmentImage: row.equipment_image || '',
   ownerId: row.loueur_id || undefined,
   ownerName: row.owner_name || '',
-  ownerEmail: row.owner_email || '',
-  ownerPhone: row.owner_phone || '',
+  ownerEmail: contacts?.owner_email || row.owner_email || '',
+  ownerPhone: contacts?.owner_phone || row.owner_phone || '',
   locataireId: row.locataire_id,
   loueurId: row.loueur_id || undefined,
   clientName: row.client_name || '',
-  clientEmail: row.client_email || '',
-  clientPhone: row.client_phone || '',
+  clientEmail: contacts?.client_email || row.client_email || '',
+  clientPhone: contacts?.client_phone || row.client_phone || '',
   startDate: row.start_date,
   endDate: row.end_date,
   days: Number(row.days) || 1,
@@ -220,6 +289,39 @@ const getAuthUserId = async (): Promise<string | null> => {
 };
 
 /**
+ * Récupère les coordonnées des contreparties pour les réservations payées.
+ * La fonction SQL renvoie une ligne vide tant que `payment_confirmed_at` est
+ * nul : aucun contact n'est donc exposé avant le paiement.
+ */
+const fetchBookingContacts = async (): Promise<Map<string, BookingContacts>> => {
+  const contacts = new Map<string, BookingContacts>();
+
+  try {
+    const { data, error } = await supabase.rpc('get_my_booking_contacts');
+
+    if (error) {
+      // Migration 07 non exécutée : on continue sans coordonnées plutôt que de
+      // casser l'affichage des réservations.
+      console.warn('[Supabase bookings] Coordonnées indisponibles :', error.message);
+      return contacts;
+    }
+
+    for (const row of (data || []) as BookingContactsRow[]) {
+      contacts.set(row.booking_id, {
+        owner_email: row.owner_email,
+        owner_phone: row.owner_phone,
+        client_email: row.client_email,
+        client_phone: row.client_phone,
+      });
+    }
+  } catch (err) {
+    console.warn('[Supabase bookings] Exception get_my_booking_contacts :', err);
+  }
+
+  return contacts;
+};
+
+/**
  * Récupère toutes les réservations visibles par l'utilisateur connecté.
  * La RLS ne renvoie que celles dont il est locataire ou loueur.
  */
@@ -228,17 +330,23 @@ export const fetchBookingsForUser = async (): Promise<BookingRecord[]> => {
   if (!userId) return [];
 
   try {
-    const { data, error } = await supabase
-      .from('bookings')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const [{ data, error }, contacts] = await Promise.all([
+      supabase
+        .from('bookings')
+        .select(BOOKING_PUBLIC_COLUMNS)
+        .order('created_at', { ascending: false }),
+      fetchBookingContacts(),
+    ]);
 
     if (error) {
       console.warn('[Supabase bookings] Chargement impossible :', error.message);
       return [];
     }
 
-    return (data || []).map((row) => mapSupabaseBookingToRecord(row as SupabaseBookingRow));
+    return (data || []).map((row) => {
+      const booking = row as unknown as SupabaseBookingRow;
+      return mapSupabaseBookingToRecord(booking, contacts.get(booking.id));
+    });
   } catch (err) {
     console.error('[Supabase bookings] Exception fetchBookingsForUser :', err);
     return [];
@@ -255,18 +363,22 @@ export const fetchBookingById = async (bookingId: string): Promise<BookingRecord
   if (!safeRef) return null;
 
   try {
-    const { data, error } = await supabase
-      .from('bookings')
-      .select('*')
-      .or(`id.eq.${safeRef},booking_reference.eq.${safeRef}`)
-      .maybeSingle();
+    const [{ data, error }, contacts] = await Promise.all([
+      supabase
+        .from('bookings')
+        .select(BOOKING_PUBLIC_COLUMNS)
+        .or(`id.eq.${safeRef},booking_reference.eq.${safeRef}`)
+        .maybeSingle(),
+      fetchBookingContacts(),
+    ]);
 
     if (error || !data) {
       if (error) console.warn('[Supabase bookings] Réservation introuvable :', error.message);
       return null;
     }
 
-    return mapSupabaseBookingToRecord(data as SupabaseBookingRow);
+    const booking = data as unknown as SupabaseBookingRow;
+    return mapSupabaseBookingToRecord(booking, contacts.get(booking.id));
   } catch (err) {
     console.error('[Supabase bookings] Exception fetchBookingById :', err);
     return null;
@@ -288,7 +400,7 @@ export const insertBookingRecord = async (booking: BookingRecord): Promise<Booki
   }
 
   const insert = async (row: ReturnType<typeof toInsertRow>) =>
-    supabase.from('bookings').insert(row).select().single();
+    supabase.from('bookings').insert(row).select(BOOKING_PUBLIC_COLUMNS).single();
 
   try {
     let { data, error } = await insert(toInsertRow(booking, userId));
@@ -312,7 +424,10 @@ export const insertBookingRecord = async (booking: BookingRecord): Promise<Booki
       return { success: false, error: error.message, code: (error as { code?: string }).code };
     }
 
-    return { success: true, booking: mapSupabaseBookingToRecord(data as SupabaseBookingRow) };
+    return {
+      success: true,
+      booking: mapSupabaseBookingToRecord(data as unknown as SupabaseBookingRow),
+    };
   } catch (err) {
     console.error('[Supabase bookings] Exception insertBookingRecord :', err);
     return { success: false, error: err instanceof Error ? err.message : 'Erreur inconnue' };
@@ -334,7 +449,7 @@ export const updateBookingRecord = async (
       .from('bookings')
       .update(row)
       .eq('id', bookingId)
-      .select()
+      .select(BOOKING_PUBLIC_COLUMNS)
       .maybeSingle();
 
     if (error) {
@@ -342,10 +457,17 @@ export const updateBookingRecord = async (
       return { success: false, error: error.message, code: (error as { code?: string }).code };
     }
 
-    return {
-      success: true,
-      booking: data ? mapSupabaseBookingToRecord(data as SupabaseBookingRow) : undefined,
-    };
+    // Les coordonnées ne sont pas dans la ligne : on les recharge après paiement
+    // pour que l'interface ne les perde pas lors d'un changement de statut.
+    const contacts = await fetchBookingContacts();
+    const booking = data
+      ? mapSupabaseBookingToRecord(
+          data as unknown as SupabaseBookingRow,
+          contacts.get((data as unknown as SupabaseBookingRow).id)
+        )
+      : undefined;
+
+    return { success: true, booking };
   } catch (err) {
     console.error('[Supabase bookings] Exception updateBookingRecord :', err);
     return { success: false, error: err instanceof Error ? err.message : 'Erreur inconnue' };
@@ -370,24 +492,26 @@ export const deleteBookingRecord = async (bookingId: string): Promise<BookingWri
 };
 
 /**
- * Écoute les réservations en temps réel.
- * La RLS est appliquée par Supabase Realtime : le loueur ne reçoit que ses locations.
+ * Rafraîchit les réservations de l'utilisateur à intervalle court.
+ *
+ * Le flux temps réel sur `bookings` a été retiré par la migration 07 : son
+ * payload contient la ligne complète, coordonnées comprises, et contournerait
+ * le filtrage des colonnes de contact avant paiement.
  */
 export const subscribeToBookings = (onChange: () => void): (() => void) => {
-  try {
-    const channel = supabase
-      .channel('public-bookings-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'bookings' },
-        () => onChange()
-      )
-      .subscribe();
+  const interval = window.setInterval(onChange, 15000);
 
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  } catch {
-    return () => {};
-  }
+  const onFocus = () => onChange();
+  const onVisibilityChange = () => {
+    if (document.visibilityState === 'visible') onChange();
+  };
+
+  window.addEventListener('focus', onFocus);
+  document.addEventListener('visibilitychange', onVisibilityChange);
+
+  return () => {
+    window.clearInterval(interval);
+    window.removeEventListener('focus', onFocus);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+  };
 };

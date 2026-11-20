@@ -204,6 +204,7 @@ export default function App() {
     stripeCheckoutUrl?: string | null;
     stripePaymentUrl?: string | null;
     stripeCautionUrl?: string | null;
+    paymentConfirmed?: boolean;
   } | null>(null);
 
   // Nettoyage de l'URL de retour Stripe (sans rechargement de page)
@@ -307,7 +308,17 @@ export default function App() {
             totalLocation: confirmed.totalPrice,
             montantCaution: confirmed.cautionAmount,
           })
-            .then(() => updateBookingRecord(confirmed.id, { confirmationEmailSentAt: new Date().toISOString() }))
+            .then((res) => {
+              if (!res.success) {
+                // Paiement pas encore confirmé par le webhook, ou Resend indisponible :
+                // on ne marque PAS l'e-mail comme envoyé, pour permettre un nouvel essai.
+                console.warn('⚠️ [Stripe Flow] Récapitulatif non envoyé :', res.error);
+                return;
+              }
+              return updateBookingRecord(confirmed.id, {
+                confirmationEmailSentAt: new Date().toISOString(),
+              });
+            })
             .catch((e) => console.warn('Erreur envoi email récapitulatif :', e));
         }
 
@@ -336,6 +347,7 @@ export default function App() {
           montantCaution: confirmed.cautionAmount,
           dureeJours: confirmed.days,
           networkStatus: 'success',
+          paymentConfirmed: Boolean(confirmed.paymentConfirmedAt || confirmed.status !== 'pending_payment'),
         });
         setLastPayload({
           client_nom: confirmed.clientName,
@@ -1020,6 +1032,21 @@ export default function App() {
       localStorage.setItem('matik_user_session', JSON.stringify(profile));
       localStorage.setItem('matik_user', JSON.stringify(profile));
     } catch {}
+
+    void supabase.auth.getUser().then(({ data }) => {
+      if (data?.user) {
+        void supabase.auth.updateUser({
+          data: {
+            display_name: profile.displayName || undefined,
+            pseudo: profile.displayName || undefined,
+            role: profile.role,
+            city: profile.city,
+            company_name: 'companyName' in profile ? profile.companyName : undefined,
+            siret: 'siret' in profile ? profile.siret : undefined,
+          },
+        }).catch(() => {});
+      }
+    }).catch(() => {});
   };
 
   const handleLoginSuccess = (user: CurrentUser) => {

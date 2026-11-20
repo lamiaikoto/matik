@@ -36,12 +36,14 @@ export const mapSupabaseUserToMatikProfile = (user: any): CurrentUser => {
   const phone = metadata.phone || user.phone || '';
   const city = metadata.city || 'France';
   const stripeConnectAccountId = metadata.stripe_connect_account_id || metadata.stripeConnectAccountId || undefined;
+  const displayName = metadata.display_name || metadata.displayName || metadata.pseudo || undefined;
 
   if (role === 'loueur_pro') {
     const profile: LoueurProProfile = {
       id: user.id,
       role: 'loueur_pro',
       name: fullName,
+      displayName,
       prenom: prenom || fullName,
       nom: nom,
       companyName: metadata.company_name || metadata.companyName || fullName,
@@ -61,6 +63,7 @@ export const mapSupabaseUserToMatikProfile = (user: any): CurrentUser => {
       prenom: prenom || fullName,
       nom: nom,
       name: fullName,
+      displayName,
       email,
       phone,
       city,
@@ -76,6 +79,7 @@ export const mapSupabaseUserToMatikProfile = (user: any): CurrentUser => {
     prenom: prenom || fullName,
     nom: nom,
     name: fullName,
+    displayName,
     email,
     phone,
     city,

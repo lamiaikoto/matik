@@ -42,8 +42,10 @@ export interface EmailData {
   clientPrenom: string;
   clientNom: string;
   clientEmail: string;
+  clientTelephone?: string;
   loueurNom: string;
   loueurEmail: string;
+  loueurTelephone?: string;
   equipmentName: string;
   equipmentCategory: string;
   startDate: string;
@@ -53,6 +55,10 @@ export interface EmailData {
   fraisService: number;
   totalLocation: number;
   montantCaution: number;
+  /** Ville de remise du matériel (annonce), affichée après paiement. */
+  pickupCity?: string;
+  /** Code postal de remise (annonce), affiché après paiement. */
+  pickupPostalCode?: string;
   stripeCheckoutUrl?: string;
   stripePaymentUrl?: string;
   stripeCautionUrl?: string;
@@ -256,6 +262,14 @@ async function generateContractPDF(data: ContractData): Promise<Buffer> {
 }
 
 // ─── 2. ENVOI DES E-MAILS (RESEND) ──────────────────────────
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
 function buildEmailHTML(data: EmailData, role: 'client' | 'loueur'): string {
   const isClient = role === 'client';
   const greeting = isClient ? `Bonjour ${data.clientPrenom},` : `Bonjour ${data.loueurNom},`;
@@ -305,6 +319,26 @@ function buildEmailHTML(data: EmailData, role: 'client' | 'loueur'): string {
       </p>
       <p style="margin:4px 0 0;font-size:12px;color:#047857;">
         Votre contrat de location signé est joint au format PDF à cet e-mail.
+      </p>
+    </div>
+    <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
+      <p style="margin:0 0 10px;font-size:11px;color:#64748B;text-transform:uppercase;font-weight:700;letter-spacing:1px;">Coordonnées pour la remise</p>
+      <table width="100%" cellpadding="3" cellspacing="0" style="font-size:13px;color:#334155;">
+        ${isClient
+          ? `<tr><td style="color:#64748B;width:42%;">Loueur :</td><td style="font-weight:700;color:#0F172A;">${escapeHtml(data.loueurNom || 'Loueur Matik')}</td></tr>
+        <tr><td style="color:#64748B;">Téléphone :</td><td>${escapeHtml(data.loueurTelephone || 'Non renseigné')}</td></tr>
+        <tr><td style="color:#64748B;">E-mail :</td><td>${escapeHtml(data.loueurEmail || 'Non renseigné')}</td></tr>`
+          : `<tr><td style="color:#64748B;width:42%;">Locataire :</td><td style="font-weight:700;color:#0F172A;">${escapeHtml(`${data.clientPrenom} ${data.clientNom}`.trim() || 'Locataire Matik')}</td></tr>
+        <tr><td style="color:#64748B;">Téléphone :</td><td>${escapeHtml(data.clientTelephone || 'Non renseigné')}</td></tr>
+        <tr><td style="color:#64748B;">E-mail :</td><td>${escapeHtml(data.clientEmail || 'Non renseigné')}</td></tr>`}
+        <tr><td style="color:#64748B;">Lieu de remise :</td><td>${escapeHtml(
+          [data.pickupCity, data.pickupPostalCode ? `(${data.pickupPostalCode})` : '']
+            .filter(Boolean)
+            .join(' ') || 'À convenir ensemble'
+        )}</td></tr>
+      </table>
+      <p style="margin:10px 0 0;font-size:11px;color:#64748B;line-height:1.5;">
+        Ces coordonnées sont réservées aux deux parties et ne sont communiquées qu'après confirmation du paiement.
       </p>
     </div>
     <p style="font-size:12px;color:#64748B;line-height:1.6;margin:16px 0 0;">
@@ -1070,6 +1104,16 @@ export default async function handler(req: any, res: any) {
     if (body.action === 'send_confirmation_email') {
       const booking = await fetchBookingForUser(body.bookingId || body.booking_id, user.id);
 
+      // Les coordonnées des deux parties ne doivent jamais partir avant que le
+      // paiement de la location soit confirmé par le webhook Stripe.
+      if (!booking.payment_confirmed_at) {
+        throw new ApiError(
+          409,
+          'PAYMENT_NOT_CONFIRMED',
+          "Le récapitulatif et les coordonnées de remise ne seront envoyés qu'après confirmation du paiement. Aucun montant n'a été débité pour l'instant."
+        );
+      }
+
       if (booking.confirmation_email_sent_at) {
         return res.status(200).json({
           success: true,
@@ -1080,14 +1124,34 @@ export default async function handler(req: any, res: any) {
 
       console.log(`📬 [Vercel API Booking] Envoi du récapitulatif pour ${booking.id} (demandé par ${user.id})`);
 
+      // Lieu de remise : ville et code postal de l'annonce (jamais l'adresse
+      // exacte, qui n'est pas stockée dans Matik).
+      let pickupCity = '';
+      let pickupPostalCode = '';
+      if (booking.equipment_id) {
+        try {
+          const { data: equipmentRow } = await getSupabaseAdmin()
+            .from('equipments')
+            .select('city,postal_code')
+            .eq('id', booking.equipment_id)
+            .maybeSingle();
+          pickupCity = String(equipmentRow?.city || '').trim();
+          pickupPostalCode = String(equipmentRow?.postal_code || '').trim();
+        } catch (locErr: any) {
+          console.warn('⚠️ [Supabase] Lieu de remise non résolu :', locErr?.message || locErr);
+        }
+      }
+
       const clientName = (booking.client_name || '').trim();
       const emailPayload: EmailData = {
         bookingId: booking.id,
         clientPrenom: clientName.split(' ')[0] || 'Locataire',
         clientNom: clientName.split(' ').slice(1).join(' '),
         clientEmail: booking.client_email,
+        clientTelephone: booking.client_phone || '',
         loueurNom: booking.owner_name || '',
         loueurEmail: booking.owner_email || '',
+        loueurTelephone: booking.owner_phone || '',
         equipmentName: booking.equipment_name,
         equipmentCategory: booking.equipment_category,
         startDate: booking.start_date,
@@ -1097,6 +1161,8 @@ export default async function handler(req: any, res: any) {
         fraisService: Number(booking.service_fee) || 0,
         totalLocation: Number(booking.total_price) || 0,
         montantCaution: Number(booking.caution_amount) || 0,
+        pickupCity,
+        pickupPostalCode,
       };
 
       const contractData: ContractData = {
@@ -1442,18 +1508,15 @@ export default async function handler(req: any, res: any) {
     console.log(`================================================================\n`);
 
     // 4. Réponse
-    // ⚠️ Vercel limite la taille de réponse à 4.5 MB.
-    // On n'inclut le PDF en base64 que si le buffer est raisonnable (< 3 MB encodé).
-    const pdfBase64 = pdfBuffer.length < 2_200_000 ? pdfBuffer.toString('base64') : undefined;
-    if (!pdfBase64) {
-      console.warn(`⚠️ [Vercel API] PDF trop grand (${pdfBuffer.length} octets) — base64 omis de la réponse JSON pour respecter la limite Vercel.`);
-    }
-
+    // Le contrat PDF contient les coordonnées des deux parties : il n'est
+    // volontairement PAS renvoyé avant paiement. Il sera régénéré côté serveur
+    // et joint à l'e-mail de confirmation, une fois le paiement validé.
     return res.status(200).json({
       success: true,
       bookingId,
       status: 'pending_payment',
-      message: 'Réservation validée en attente de règlement et sessions de paiement initialisées.',
+      message:
+        'Réservation enregistrée en attente de paiement. Les coordonnées de remise seront débloquées après confirmation du paiement.',
       pricing: {
         days: pricing.days,
         dailyRate: pricing.dailyRate,
@@ -1468,7 +1531,7 @@ export default async function handler(req: any, res: any) {
         generated: true,
         sizeBytes: pdfBuffer.length,
         filename: `contrat-location-${bookingId}.pdf`,
-        pdfBase64: pdfBase64 || null,
+        pdfBase64: null,
       },
       email: {
         pendingConfirmation: true,
@@ -1502,10 +1565,8 @@ export default async function handler(req: any, res: any) {
         date_fin: contractData.endDate,
         timestamp: new Date().toISOString(),
         loueur_nom: contractData.loueurNom,
-        loueur_email: contractData.loueurEmail,
-        loueur_telephone: contractData.loueurTelephone,
-        artisan_email: contractData.loueurEmail,
-        artisan_telephone: contractData.loueurTelephone,
+        // Coordonnées volontairement absentes : elles ne sont transmises
+        // qu'après paiement (e-mail de confirmation + espace réservation).
       },
     });
   } catch (error: any) {

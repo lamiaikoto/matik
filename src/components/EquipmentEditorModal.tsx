@@ -642,7 +642,7 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                          Nom affiché du loueur <span className="text-amber-600">*</span>
+                          Nom affiché du loueur (pseudo public) <span className="text-amber-600">*</span>
                         </label>
                         <input
                           type="text"
@@ -654,7 +654,7 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
                           className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
                         />
                         <p className="mt-1 text-[10px] leading-snug text-slate-500">
-                          Seul ce nom sera visible publiquement. N'indiquez ni votre nom complet, ni votre e-mail.
+                          Seul ce pseudo est public sur l’annonce et dans les menus. N’indiquez pas votre nom complet ni votre e-mail.
                         </p>
                       </div>
 
@@ -710,34 +710,45 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
                       </div>
                     </div>
 
-                    {/* Coordonnées de contact pour mise en relation & notifications */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-200/60">
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
-                          <Phone className="w-3 h-3 text-slate-400" />
-                          <span>Téléphone (Appels & WhatsApp locataires)</span>
-                        </label>
-                        <input
-                          type="tel"
-                          value={ownerPhone}
-                          onChange={(e) => setOwnerPhone(e.target.value)}
-                          placeholder="Ex: 06 12 34 56 78"
-                          className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                        />
-                      </div>
+                    <p className="text-[10px] text-slate-500 flex items-center gap-1.5 pt-1">
+                      <MapPin className="w-3 h-3 text-amber-500 shrink-0" />
+                      <span>Zone approximative : aucune adresse exacte n'est requise ni affichée. Le lieu précis de remise est convenu après paiement validé.</span>
+                    </p>
 
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
-                          <Mail className="w-3 h-3 text-slate-400" />
-                          <span>E-mail (Notifications & contrat)</span>
-                        </label>
-                        <input
-                          type="email"
-                          value={ownerEmail}
-                          onChange={(e) => setOwnerEmail(e.target.value)}
-                          placeholder="Ex: contact@monatelier.fr"
-                          className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                        />
+                    {/* Coordonnées de contact pour mise en relation & notifications */}
+                    <div className="space-y-1 pt-2 border-t border-slate-200/60">
+                      <p className="text-[10px] text-emerald-800 font-medium flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5">
+                        <Lock className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span>Coordonnées privées : votre numéro et votre e-mail ne sont jamais visibles publiquement. Ils ne seront transmis au locataire qu'après paiement confirmé.</span>
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
+                            <Phone className="w-3 h-3 text-slate-400" />
+                            <span>Téléphone (privé, réservé après paiement)</span>
+                          </label>
+                          <input
+                            type="tel"
+                            value={ownerPhone}
+                            onChange={(e) => setOwnerPhone(e.target.value)}
+                            placeholder="Ex: 06 12 34 56 78"
+                            className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
+                            <Mail className="w-3 h-3 text-slate-400" />
+                            <span>E-mail (privé, notifications & contrat)</span>
+                          </label>
+                          <input
+                            type="email"
+                            value={ownerEmail}
+                            onChange={(e) => setOwnerEmail(e.target.value)}
+                            placeholder="Ex: contact@monatelier.fr"
+                            className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>

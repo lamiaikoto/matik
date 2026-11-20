@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Equipment, BookingPayload } from '../types';
-import { CounterpartContactCard } from './CounterpartContactCard';
 import {
   CheckCircle2,
   Mail,
@@ -10,6 +9,7 @@ import {
   ExternalLink,
   X,
   ShieldAlert,
+  Lock,
   ArrowRight,
   Download,
 } from 'lucide-react';
@@ -34,6 +34,8 @@ interface ConfirmationModalProps {
     stripeCheckoutUrl?: string | null;
     stripePaymentUrl?: string | null;
     stripeCautionUrl?: string | null;
+    /** Paiement de la location confirmé côté serveur. */
+    paymentConfirmed?: boolean;
   } | null;
 }
 
@@ -61,10 +63,12 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             </div>
             <div className="space-y-1">
               <h3 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
-                Réservation validée !
+                {details.paymentConfirmed ? 'Paiement confirmé' : 'Réservation enregistrée'}
               </h3>
               <p className="text-sm sm:text-base text-emerald-700 font-semibold leading-snug">
-                Paiement et réservation pris en compte. Votre contrat et le récapitulatif vous ont également été envoyés par e-mail.
+                {details.paymentConfirmed
+                  ? 'Votre contrat et les coordonnées de remise vous ont été envoyés par e-mail.'
+                  : 'Finalisez le paiement pour confirmer la réservation et débloquer les coordonnées de remise.'}
               </p>
             </div>
           </div>
@@ -151,18 +155,21 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                 </div>
               </div>
 
-              {/* Mise en relation directe : Carte de contact du Loueur (Appel & WhatsApp 1-clic) */}
-              <div className="space-y-2">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Contact direct avec votre loueur pour convenir du retrait :
+              {/* Mise en relation : coordonnées débloquées après paiement */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-slate-200 text-slate-600 flex items-center justify-center shrink-0">
+                  <Lock className="w-4 h-4" />
                 </div>
-                <CounterpartContactCard
-                  counterpartRole="loueur"
-                  name={payload.loueur_nom || details.equipment.ownerName || details.equipment.partnerArtisan || 'Loueur partenaire'}
-                  phone={payload.loueur_telephone || details.equipment.ownerPhone || ''}
-                  email={payload.loueur_email || details.equipment.ownerEmail || ''}
-                  equipmentName={details.equipment.name}
-                />
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-slate-800">
+                    Coordonnées de remise protégées
+                  </p>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    {details.paymentConfirmed
+                      ? 'Le nom, le téléphone, l’e-mail de votre loueur et le lieu de remise sont disponibles dans votre espace réservation et dans l’e-mail de confirmation.'
+                      : 'Le nom, le téléphone, l’e-mail de votre loueur et le lieu de remise seront débloqués dès que le paiement de la location sera confirmé.'}
+                  </p>
+                </div>
               </div>
 
               {/* Step-by-Step Flow */}

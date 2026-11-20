@@ -33,6 +33,7 @@ export interface LoueurProProfile {
   id: string;
   role: 'loueur_pro';
   name: string; // Nom du contact ou responsable
+  displayName?: string; // Pseudo ou nom public affiché sur les annonces et menus
   prenom?: string;
   nom?: string;
   companyName: string;
@@ -49,6 +50,7 @@ export interface LoueurParticulierProfile {
   prenom: string;
   nom: string;
   name?: string;
+  displayName?: string; // Pseudo ou nom public affiché sur les annonces et menus
   email: string;
   phone: string;
   city: string;
@@ -59,6 +61,7 @@ export interface ClientProfile {
   id: string;
   role: 'client';
   name: string;
+  displayName?: string; // Pseudo ou nom public affiché sur les annonces et menus
   prenom?: string;
   nom?: string;
   email: string;
