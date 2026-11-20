@@ -741,19 +741,23 @@ async function createStripePaymentSession(data: StripeHoldData, customerId?: str
  * - request_extended_authorization: 'if_available' pour étendre la durée de pré-autorisation
  */
 async function createStripeCautionSession(data: StripeHoldData, customerId?: string): Promise<StripeHoldResult> {
+  const cautionCents = Math.round((Number(data.montantCaution) || 0) * 100);
+
+  // Aucune caution demandée : il n'y a rien à bloquer.
+  if (cautionCents <= 0) {
+    return { success: true };
+  }
+
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey || !secretKey.trim()) {
-    console.warn('⚠️ [Stripe] STRIPE_SECRET_KEY non configurée — session caution ignorée.');
-    return { success: true };
+    // Une caution est due mais Stripe n'est pas configuré : on refuse la
+    // réservation au lieu de laisser croire qu'une empreinte a été posée.
+    console.error('❌ [Stripe Caution] STRIPE_SECRET_KEY absente alors qu’une caution est demandée.');
+    return { success: false, error: 'Stripe non configuré : empreinte de caution impossible.' };
   }
 
   try {
     const stripe = new Stripe(secretKey.trim(), { apiVersion: '2024-11-20.acacia' } as any);
-    const cautionCents = Math.round(data.montantCaution * 100);
-
-    if (cautionCents <= 0) {
-      return { success: true };
-    }
 
     const effectiveCustomerId = customerId || (await getOrCreateStripeCustomer(stripe, data.clientEmail, data.clientNom));
     const expiresAt = Math.floor(Date.now() / 1000) + 45 * 60;
@@ -816,6 +820,17 @@ async function createStripeCautionSession(data: StripeHoldData, customerId?: str
 
     console.log(`✅ [Stripe Caution] Session empreinte créée : ${session.id} (${data.montantCaution} €, customer: ${effectiveCustomerId})`);
 
+    if (!session.url) {
+      // Sans URL de redirection, le locataire ne peut pas déposer l'empreinte :
+      // on considère la caution comme non créée et la réservation sera annulée.
+      console.error('❌ [Stripe Caution] Session créée sans URL de paiement.');
+      return {
+        success: false,
+        sessionId: session.id,
+        error: 'Session de caution Stripe sans URL de paiement.',
+      };
+    }
+
     return {
       success: true,
       sessionId: session.id,
@@ -858,6 +873,60 @@ async function createStripeCheckoutSessions(data: StripeHoldData): Promise<Strip
   }
 
   return { payment, caution };
+}
+
+// ─── 3d. ANNULATION D'UNE TENTATIVE DE RÉSERVATION ──────────
+/**
+ * Expire une session Stripe Checkout encore ouverte.
+ * Une session expirée ne peut plus être payée : c'est ce qui garantit qu'aucun
+ * montant n'est encaissé lorsqu'une étape du parcours échoue.
+ */
+async function expireStripeCheckoutSession(sessionId?: string | null, label = 'session'): Promise<void> {
+  if (!sessionId) return;
+
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey || !secretKey.trim()) return;
+
+  try {
+    const stripe = new Stripe(secretKey.trim(), { apiVersion: '2024-11-20.acacia' } as any);
+    await stripe.checkout.sessions.expire(sessionId);
+    console.log(`🧹 [Stripe] ${label} ${sessionId} expirée — aucun encaissement possible.`);
+  } catch (err: any) {
+    // Session déjà expirée/payée ou identifiant inconnu : on trace sans masquer
+    // l'erreur d'origine renvoyée au locataire.
+    console.warn(`⚠️ [Stripe] ${label} ${sessionId} non expirée :`, err?.message || err);
+  }
+}
+
+/**
+ * Annule une tentative de réservation : expire les sessions Stripe encore
+ * ouvertes et supprime la ligne créée pour cette tentative (aucune ligne
+ * orpheline, aucun encaissement possible).
+ */
+async function rollbackBookingAttempt(
+  admin: ReturnType<typeof getSupabaseAdmin>,
+  bookingId: string,
+  insertedFresh: boolean,
+  sessions: { paymentSessionId?: string | null; cautionSessionId?: string | null }
+): Promise<void> {
+  await Promise.all([
+    expireStripeCheckoutSession(sessions.paymentSessionId, 'session de paiement'),
+    expireStripeCheckoutSession(sessions.cautionSessionId, 'session de caution'),
+  ]);
+
+  if (!insertedFresh) return;
+
+  const { error } = await admin
+    .from('bookings')
+    .delete()
+    .eq('id', bookingId)
+    .eq('status', 'pending_payment');
+
+  if (error) {
+    console.error('❌ [Supabase] Réservation annulée non supprimée :', error.message);
+  } else {
+    console.log(`🧹 [Supabase] Réservation ${bookingId} supprimée (tentative abandonnée).`);
+  }
 }
 
 // ─── 4. HANDLER VERCEL SERVERLESS FUNCTION ──────────────────
@@ -1316,15 +1385,38 @@ export default async function handler(req: any, res: any) {
     // réservation plutôt que de renvoyer un succès trompeur au locataire.
     if (!stripeSessions.payment.success) {
       console.error('❌ [Stripe] Session de paiement non créée :', stripeSessions.payment.error);
-      if (insertedFresh) {
-        await admin.from('bookings').delete().eq('id', bookingId).eq('status', 'pending_payment');
-      }
+      await rollbackBookingAttempt(admin, bookingId, insertedFresh, {
+        paymentSessionId: stripeSessions.payment.sessionId,
+        cautionSessionId: stripeSessions.caution.sessionId,
+      });
       throw new ApiError(
         502,
         'PAYMENT_SESSION_FAILED',
         "Le paiement n'a pas pu être initialisé. Aucun montant n'a été débité. " +
           'Réessayez dans quelques instants.',
         { stripeError: stripeSessions.payment.error || null }
+      );
+    }
+
+    // CAUTION BLOQUANTE : une caution prévue doit impérativement être bloquée.
+    // Sans empreinte, on annule la réservation (ligne + session de paiement)
+    // pour qu'aucun montant, ni location ni caution, ne soit débité.
+    if (pricing.caution > 0 && !stripeSessions.caution.success) {
+      console.error('❌ [Stripe] Empreinte de caution non créée :', stripeSessions.caution.error);
+      await rollbackBookingAttempt(admin, bookingId, insertedFresh, {
+        paymentSessionId: stripeSessions.payment.sessionId,
+        cautionSessionId: stripeSessions.caution.sessionId,
+      });
+      throw new ApiError(
+        502,
+        'DEPOSIT_SESSION_FAILED',
+        "La caution n'a pas pu être bloquée. La réservation a été annulée : " +
+          "aucun montant n'a été débité, ni pour la location ni pour la caution. " +
+          'Réessayez dans quelques instants ou contactez le support Matik.',
+        {
+          stripeError: stripeSessions.caution.error || null,
+          cautionAmount: pricing.caution,
+        }
       );
     }
 
