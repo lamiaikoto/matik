@@ -14,6 +14,7 @@ import {
   Plus,
   Layers,
   ChevronDown,
+  Video,
 } from 'lucide-react';
 import { MatikLogo } from './MatikLogo';
 import { LocaleSelector, LocaleSelectorMobile } from './LocaleSelector';
@@ -68,6 +69,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'accueil', label: t('nav.home'), icon: Home },
     { id: 'catalogue', label: t('nav.catalogue'), icon: Package },
     { id: 'espace-loueur', label: isLoueur ? t('nav.myListings') : t('nav.loueurSpace'), icon: isLoueur ? Layers : Building2 },
+    { id: 'etat-des-lieux', label: t('nav.videoInspection'), icon: Video },
     { id: 'garanties', label: t('nav.guarantees'), icon: ShieldCheck },
   ];
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Equipment, LoueurProProfile, LoueurParticulierProfile, ClientProfile, CurrentUser, BookingRecord } from '../types';
 import { CounterpartContactCard } from './CounterpartContactCard';
 import { BookingMessages } from './BookingMessages';
+import type { VideoInspectionCategory, VideoInspectionPrefill } from '../lib/videoInspectionService';
 import { isEquipmentRented } from '../utils/availability';
 import { maskEmail, anonymizeFullName, buildPublicDisplayNameSuggestion } from '../lib/publicIdentity';
 import {
@@ -46,6 +47,7 @@ import {
   Clock,
   ExternalLink,
   Loader2,
+  Video,
 } from 'lucide-react';
 import {
   getStripeConnectStatus,
@@ -82,7 +84,19 @@ interface LoueurDashboardProps {
   ) => void;
   onOpenProfitSimulator?: () => void;
   onViewReviews?: (equipment: Equipment) => void;
+  /** Ouvre l'outil d'état des lieux vidéo, éventuellement prérempli. */
+  onOpenVideoInspection?: (prefill?: VideoInspectionPrefill) => void;
 }
+
+/** Devine la catégorie d'état des lieux à partir de la catégorie de l'annonce. */
+const guessInspectionCategory = (category?: string): VideoInspectionCategory => {
+  const value = (category || '').toLowerCase();
+  if (/(appart|maison|logement|chambre|studio|immobil|villa|gîte|gite)/.test(value)) return 'logement';
+  if (/(véhicule|vehicule|voiture|utilitaire|van|camion|scooter|moto|remorque)/.test(value)) return 'vehicule';
+  if (/(événement|evenement|son|hi-fi|hifi|audio|lumière|lumiere|vaisselle|mobilier)/.test(value)) return 'evenementiel';
+  if (/(outil|bricolage|btp|chantier|matériel|materiel|jardin|nettoyage|échelle|echelle)/.test(value)) return 'outillage';
+  return 'autre';
+};
 
 // Reusable Enterprise Floating Input with Leading Icon & Visual Validation States
 interface FloatingInputProps {
@@ -250,6 +264,7 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
   onEquipmentPostRestitutionAction,
   onOpenProfitSimulator,
   onViewReviews,
+  onOpenVideoInspection,
 }) => {
   const [dashboardTab, setDashboardTab] = useState<'annonces' | 'reservations' | 'materiel'>(() => {
     if (initialTab) return initialTab;
@@ -1315,6 +1330,20 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
           </div>
 
           <div className="flex items-center gap-2.5">
+            {/* Accès direct à l'état des lieux vidéo horodaté */}
+            {onOpenVideoInspection && (
+              <button
+                type="button"
+                onClick={() => onOpenVideoInspection()}
+                className="px-4 py-2.5 rounded-2xl bg-slate-950 hover:bg-slate-800 text-white text-xs font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs shrink-0"
+                title="Filmer un état des lieux vidéo horodaté et partager le lien au client"
+              >
+                <Video className="w-4 h-4 text-amber-400" />
+                <span className="hidden sm:inline">État des lieux vidéo</span>
+                <span className="sm:hidden">Vidéo</span>
+              </button>
+            )}
+
             {/* Quick button to add equipment right from the tabs bar */}
             <button
               type="button"
@@ -1460,6 +1489,25 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                         {/* Actions (Modifier, Masquer/Réactiver, Supprimer) */}
                         <td className="py-4 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            {/* Bouton État des lieux vidéo */}
+                            {onOpenVideoInspection && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onOpenVideoInspection({
+                                    itemTitle: item.name,
+                                    category: guessInspectionCategory(item.category),
+                                    inspectionType: rentInfo.isRented ? 'entree' : 'sortie',
+                                  })
+                                }
+                                className="px-2.5 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-white transition-colors flex items-center gap-1 font-bold text-xs cursor-pointer shadow-2xs"
+                                title="Filmer un état des lieux vidéo horodaté de cet équipement"
+                              >
+                                <Video className="w-3.5 h-3.5 text-amber-400" />
+                                <span>Vidéo</span>
+                              </button>
+                            )}
+
                             {/* Bouton Modifier */}
                             <button
                               type="button"
@@ -1991,6 +2039,27 @@ export const LoueurDashboard: React.FC<LoueurDashboardProps> = ({
                         </div>
 
                         <div className="flex items-center gap-2">
+                          {/* État des lieux vidéo horodaté (départ / retour) */}
+                          {onOpenVideoInspection && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onOpenVideoInspection({
+                                  itemTitle: booking.equipmentName,
+                                  category: guessInspectionCategory(booking.equipmentCategory),
+                                  inspectionType: booking.status === 'restitution_signalee' || booking.status === 'restitue'
+                                    ? 'sortie'
+                                    : 'entree',
+                                })
+                              }
+                              className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
+                              title="Filmer l'état des lieux vidéo horodaté de cette réservation"
+                            >
+                              <Video className="w-3.5 h-3.5 text-amber-600" />
+                              <span>État des lieux vidéo</span>
+                            </button>
+                          )}
+
                           {/* Pas de boutons d'action pour une réservation en attente de paiement */}
                           {isPendingPayment ? (
                             <span className="px-3.5 py-2 rounded-xl bg-orange-50 text-orange-800 border border-orange-200 font-bold text-xs flex items-center gap-1.5">

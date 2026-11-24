@@ -77,6 +77,7 @@ export type PageType =
   | 'catalogue'
   | 'espace-loueur'
   | 'garanties'
+  | 'etat-des-lieux'
   | 'mentions-legales'
   | 'cgu'
   | 'confidentialite';

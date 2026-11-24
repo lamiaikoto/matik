@@ -1,5 +1,5 @@
 import React from 'react';
-import { Mail, Phone, MapPin, Smartphone } from 'lucide-react';
+import { Mail, Phone, MapPin, Smartphone, Video } from 'lucide-react';
 import { PageType } from '../types';
 import { MatikLogo } from './MatikLogo';
 
@@ -63,6 +63,19 @@ export const Footer: React.FC<{
                   className="hover:text-slate-950 transition-colors cursor-pointer text-left"
                 >
                   Catalogue complet
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onNavigate?.('etat-des-lieux');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="hover:text-slate-950 transition-colors cursor-pointer text-left inline-flex items-center gap-1.5 font-medium"
+                >
+                  <Video className="w-3 h-3 text-amber-600" />
+                  État des lieux vidéo
                 </button>
               </li>
               <li>

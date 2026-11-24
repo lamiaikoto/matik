@@ -48,6 +48,12 @@ const DigitalInspectionModal = React.lazy(() =>
 const EquipmentDetails = React.lazy(() =>
   import('./components/EquipmentDetails').then((m) => ({ default: m.EquipmentDetails }))
 );
+const VideoInspectionPage = React.lazy(() =>
+  import('./components/VideoInspectionPage').then((m) => ({ default: m.VideoInspectionPage }))
+);
+const VideoInspectionSharePage = React.lazy(() =>
+  import('./components/VideoInspectionSharePage').then((m) => ({ default: m.VideoInspectionSharePage }))
+);
 import { EQUIPMENT_LIST } from './data/equipment';
 import { CatalogFilters, EMPTY_CATALOG_FILTERS } from './data/catalogFilters';
 import { supabase, mapSupabaseUserToMatikProfile } from './lib/supabase';
@@ -61,6 +67,7 @@ import {
   generateUUID,
 } from './lib/equipmentService';
 import { buildPublicDisplayNameSuggestion } from './lib/publicIdentity';
+import type { VideoInspectionPrefill } from './lib/videoInspectionService';
 import { sendConfirmationEmailAfterValidation, releaseStripeCautionApi, syncCautionSessionDetailsApi } from './services/booking';
 import {
   fetchBookingsForUser,
@@ -82,8 +89,33 @@ import {
   InspectionReport,
 } from './types';
 
+/**
+ * Route publique d'un état des lieux vidéo : /etat-des-lieux/<uuid>.
+ * L'identifiant est un UUID non devinable, partagé explicitement par le loueur.
+ */
+const readSharedInspectionId = (): string | null => {
+  try {
+    const match = window.location.pathname.match(/^\/etat-des-lieux\/([0-9a-f-]{36})\/?$/i);
+    return match ? match[1].toLowerCase() : null;
+  } catch {
+    return null;
+  }
+};
+
+const readInitialPage = (): PageType => {
+  try {
+    const path = window.location.pathname.replace(/\/+$/, '');
+    return path === '/etat-des-lieux' ? 'etat-des-lieux' : 'accueil';
+  } catch {
+    return 'accueil';
+  }
+};
+
 export default function App() {
-  const [currentPage, setCurrentPage] = useState<PageType>('accueil');
+  const [currentPage, setCurrentPage] = useState<PageType>(readInitialPage);
+  const [sharedInspectionId, setSharedInspectionId] = useState<string | null>(readSharedInspectionId);
+  const [videoInspectionPrefill, setVideoInspectionPrefill] =
+    useState<VideoInspectionPrefill | null>(null);
   // Filtres partagés entre la recherche de l'accueil et le catalogue (état unique)
   const [catalogFilters, setCatalogFilters] = useState<CatalogFilters>(EMPTY_CATALOG_FILTERS);
   const [currentUser, setCurrentUser] = useState<CurrentUser>(null);
@@ -103,6 +135,49 @@ export default function App() {
   const [isEquipmentsLoading, setIsEquipmentsLoading] = useState(false);
   const [bookingList, setBookingList] = useState<BookingRecord[]>([]);
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
+
+  // ── Routes légères (/etat-des-lieux et /etat-des-lieux/<uuid>) ────────────
+  // L'application n'utilise pas de routeur : on synchronise l'URL uniquement
+  // pour ces deux écrans, afin que les liens de partage soient rechargeables.
+  useEffect(() => {
+    if (sharedInspectionId) return;
+
+    try {
+      const path = window.location.pathname.replace(/\/+$/, '') || '/';
+
+      if (currentPage === 'etat-des-lieux' && path !== '/etat-des-lieux') {
+        window.history.pushState({}, '', '/etat-des-lieux');
+      } else if (currentPage !== 'etat-des-lieux' && path === '/etat-des-lieux') {
+        window.history.replaceState({}, '', '/');
+      }
+    } catch {}
+  }, [currentPage, sharedInspectionId]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const shareId = readSharedInspectionId();
+      setSharedInspectionId(shareId);
+
+      if (!shareId) {
+        try {
+          const path = window.location.pathname.replace(/\/+$/, '');
+          setCurrentPage(path === '/etat-des-lieux' ? 'etat-des-lieux' : 'accueil');
+        } catch {
+          setCurrentPage('accueil');
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const handleOpenVideoInspection = (prefill?: VideoInspectionPrefill) => {
+    setVideoInspectionPrefill(prefill || null);
+    setSharedInspectionId(null);
+    setCurrentPage('etat-des-lieux');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
@@ -1062,6 +1137,25 @@ export default function App() {
     }
   };
 
+  // Page publique de partage : rendue seule, sans navigation marchande.
+  if (sharedInspectionId) {
+    return (
+      <React.Suspense fallback={<div className="min-h-screen bg-[#F8FAFC]" />}>
+        <VideoInspectionSharePage
+          id={sharedInspectionId}
+          onNavigateHome={() => {
+            try {
+              window.history.replaceState({}, '', '/');
+            } catch {}
+            setSharedInspectionId(null);
+            setCurrentPage('accueil');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        />
+      </React.Suspense>
+    );
+  }
+
   return (
     <React.Suspense fallback={null}>
       <div className="min-h-screen w-full max-w-full bg-[#F8FAFC] text-slate-900 flex flex-col font-sans selection:bg-amber-400 selection:text-slate-950">
@@ -1195,6 +1289,7 @@ export default function App() {
               setTimeout(() => scrollToSection('simulateur-rentabilite'), 50);
             }}
             onViewReviews={handleOpenDetails}
+            onOpenVideoInspection={handleOpenVideoInspection}
           />
         )}
 
@@ -1207,6 +1302,18 @@ export default function App() {
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             currentUser={currentUser}
+          />
+        )}
+
+        {/* PAGE 5: ÉTAT DES LIEUX VIDÉO HORODATÉ */}
+        {currentPage === 'etat-des-lieux' && (
+          <VideoInspectionPage
+            currentUser={currentUser}
+            prefill={videoInspectionPrefill}
+            onNavigateHome={() => {
+              setCurrentPage('accueil');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
           />
         )}
 
