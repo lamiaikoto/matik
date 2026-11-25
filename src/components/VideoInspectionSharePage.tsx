@@ -14,6 +14,7 @@ import {
   MapPin,
   ShieldCheck,
   Tag,
+  Trash2,
   Video,
 } from 'lucide-react';
 import { MatikLogo } from './MatikLogo';
@@ -22,6 +23,7 @@ import {
   VIDEO_INSPECTION_TYPE_SHORT,
   VideoInspection,
   buildInspectionShareUrl,
+  deleteInspection,
   fetchVideoInspection,
   formatInspectionDate,
   validateVideoInspection,
@@ -65,6 +67,9 @@ export const VideoInspectionSharePage: React.FC<VideoInspectionSharePageProps> =
   const [validating, setValidating] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleted, setDeleted] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,6 +126,28 @@ export const VideoInspectionSharePage: React.FC<VideoInspectionSharePageProps> =
     setValidating(false);
   }, [inspection]);
 
+  const handleDelete = useCallback(async () => {
+    if (!inspection || deleting) return;
+
+    const confirmed = window.confirm(
+      inspection.client_validated_at
+        ? 'Supprimer définitivement cet état des lieux validé ? La vidéo et l’enregistrement seront retirés ; cette action est irréversible.'
+        : 'Supprimer définitivement cet état des lieux ? La vidéo et l’enregistrement seront retirés.'
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setDeleteError(null);
+    const result = await deleteInspection(inspection.id);
+    if (!result.success) {
+      setDeleteError(result.error || 'Suppression impossible. Réessayez dans quelques instants.');
+      setDeleting(false);
+      return;
+    }
+    setDeleted(true);
+    setDeleting(false);
+  }, [inspection, deleting]);
+
   const isValidated = Boolean(inspection?.client_validated_at);
 
   return (
@@ -168,7 +195,7 @@ export const VideoInspectionSharePage: React.FC<VideoInspectionSharePageProps> =
           </div>
         )}
 
-        {!loading && inspection && (
+        {!loading && inspection && !deleted && (
           <>
             {/* Bandeau titre + statut */}
             <div className="rounded-3xl border border-slate-200 bg-white overflow-hidden shadow-sm">
@@ -338,6 +365,33 @@ export const VideoInspectionSharePage: React.FC<VideoInspectionSharePageProps> =
                       </button>
                     </>
                   )}
+
+                  {/* Suppression (créateur et détenteur du lien) — possible avant ET après validation */}
+                  <div className="border-t border-slate-200 pt-3 space-y-2">
+                    {deleteError && (
+                      <p className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                        {deleteError}
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete()}
+                      disabled={deleting}
+                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-rose-200 bg-white hover:bg-rose-50 disabled:opacity-60 disabled:cursor-not-allowed text-rose-700 text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      {deleting
+                        ? 'Suppression…'
+                        : isValidated
+                          ? 'Supprimer cette preuve validée'
+                          : 'Supprimer cet état des lieux'}
+                    </button>
+                    <p className="text-[10px] leading-relaxed text-slate-500">
+                      {isValidated
+                        ? 'La vidéo validée ne peut plus être modifiée ou remplacée ; seule cette suppression définitive est proposée.'
+                        : 'La suppression retire la vidéo du stockage et l’enregistrement associé.'}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -351,6 +405,23 @@ export const VideoInspectionSharePage: React.FC<VideoInspectionSharePageProps> =
               </p>
             </div>
           </>
+        )}
+
+        {!loading && deleted && (
+          <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-8 space-y-4 text-center">
+            <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
+            <h1 className="text-sm font-black text-emerald-900">État des lieux supprimé</h1>
+            <p className="text-xs text-emerald-800 leading-relaxed max-w-md mx-auto">
+              La vidéo et son enregistrement ont été retirés du stockage. Ce lien ne pointe plus vers aucune preuve.
+            </p>
+            <button
+              type="button"
+              onClick={onNavigateHome}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-950 text-white text-xs font-bold uppercase tracking-wider hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              Retour à l’accueil
+            </button>
+          </div>
         )}
       </main>
 

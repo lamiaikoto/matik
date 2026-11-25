@@ -202,11 +202,35 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
   const [condition, setCondition] = useState<'neuf' | 'tres_bon_etat' | 'bon_etat'>('tres_bon_etat');
   const [description, setDescription] = useState('');
 
-  // Photos - Vierge au départ
+  // Photos — limite stricte de 2 photos maximum par annonce.
+  // photos[0] = photo principale (mirror de `image` / `image_url`).
+  const MAX_PHOTOS = 2;
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [activePhotoSlot, setActivePhotoSlot] = useState<0 | 1>(0);
   const [image, setImage] = useState<string>('');
   const [imageProcessing, setImageProcessing] = useState<boolean>(false);
   const [customImageUrl, setCustomImageUrl] = useState('');
   const [photoSourceMode, setPhotoSourceMode] = useState<'upload' | 'preset' | 'url'>('upload');
+
+  /** Écrit dans le slot actif (ou le prochain slot vide en mode dépôt). */
+  const setPhotoAtSlot = (url: string, explicitSlot?: 0 | 1) => {
+    setPhotos((prev) => {
+      const slot = explicitSlot ?? (prev.length < MAX_PHOTOS ? prev.length : 0);
+      const next = [...prev];
+      next[slot] = url;
+      return next.filter(Boolean).slice(0, MAX_PHOTOS);
+    });
+    setImage(url);
+    if (photoSourceMode === 'url') setCustomImageUrl(url);
+    else setCustomImageUrl('');
+  };
+
+  const removePhotoAtSlot = (slot: number) => {
+    const next = photos.filter((_, i) => i !== slot);
+    setPhotos(next);
+    setImage(next[0] || '');
+    setCustomImageUrl('');
+  };
 
   // Specs & Tags - Vierge au départ
   const [specsList, setSpecsList] = useState<{ label: string; value: string }[]>([]);
@@ -239,7 +263,15 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
       setOwnerEmail(equipmentToEdit.ownerEmail || '');
       setCondition(equipmentToEdit.condition || 'tres_bon_etat');
       setDescription(equipmentToEdit.description || '');
-      setImage(equipmentToEdit.image || '');
+      const seedPhotos = Array.isArray(equipmentToEdit.photos) && equipmentToEdit.photos.length > 0
+        ? equipmentToEdit.photos.filter(Boolean).slice(0, MAX_PHOTOS)
+        : equipmentToEdit.image
+          ? [equipmentToEdit.image]
+          : [];
+      setPhotos(seedPhotos);
+      setImage(seedPhotos[0] || equipmentToEdit.image || '');
+      setCustomImageUrl('');
+      setActivePhotoSlot(0);
       setSpecsList(equipmentToEdit.specs || []);
       setSelectedTags(equipmentToEdit.tags || []);
     } else {
@@ -271,8 +303,10 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
       setOwnerEmail(currentUser?.email || '');
       setCondition('tres_bon_etat');
       setDescription('');
+      setPhotos([]);
       setImage('');
       setCustomImageUrl('');
+      setActivePhotoSlot(0);
       setSpecsList([]);
       setSelectedTags([]);
     }
@@ -302,6 +336,14 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
 
     try {
       const prepared = await prepareEquipmentImage(file, currentUser?.id);
+      // Limite stricte : 2 photos maximum. On remplit le prochain slot vide ;
+      // si les deux sont remplies, on remplace le slot actif sélectionné.
+      setPhotos((prev) => {
+        const next = [...prev];
+        const slot = next.length < MAX_PHOTOS ? next.length : activePhotoSlot;
+        next[slot] = prepared.url;
+        return next.filter(Boolean).slice(0, MAX_PHOTOS);
+      });
       setImage(prepared.url);
       setCustomImageUrl('');
     } catch (err: any) {
@@ -402,15 +444,17 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
       return;
     }
 
-    // VÉRIFICATION OBLIGATOIRE DE LA PHOTO
-    const chosenImage = customImageUrl.trim() || image.trim();
+    // VÉRIFICATION OBLIGATOIRE DES PHOTOS — 2 photos maximum, 1 minimum.
+    const photoList = photos.filter((p): p is string => Boolean(p && p.trim())).slice(0, MAX_PHOTOS);
+    const chosenImage = photoList[0] || customImageUrl.trim() || image.trim();
     if (!chosenImage) {
       setActiveTab('photos');
       setFormError('Une photo de votre équipement est obligatoire pour publier l\'annonce (téléversez une photo, choisissez un modèle dans la bibliothèque ou entrez une URL).');
       return;
     }
 
-    const finalImage = chosenImage;
+    const finalImage = photoList[0] || chosenImage;
+    const finalPhotos = photoList.length > 0 ? photoList : [chosenImage];
     const finalCategory = isCustomCategory && customCategoryName.trim()
       ? customCategoryName.trim()
       : category;
@@ -433,6 +477,7 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
       dailyRate: Number(dailyRate),
       depositAmount: Number(depositAmount), // Strict mandatory caution deposit
       image: finalImage,
+      photos: finalPhotos,
       description:
         description.trim() ||
         'Équipement disponible à la location avec caution sécurisée Stripe sans débit.',
@@ -1060,6 +1105,25 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
               {/* TAB 3: PHOTOS & MÉDIAS */}
               {activeTab === 'photos' && (
                 <div className="space-y-6 animate-in fade-in duration-150">
+                  {/* Cible du remplissage : quelle photo vient d'être modifiée ? */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-slate-500">Remplir :</span>
+                    {([0, 1] as const).map((slot) => (
+                      <button
+                        key={slot}
+                        type="button"
+                        onClick={() => setActivePhotoSlot(slot)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-colors ${
+                          activePhotoSlot === slot
+                            ? 'bg-slate-900 text-white'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {slot === 0 ? 'Photo principale' : photos[1] ? 'Remplacer la 2e' : 'Photo secondaire'}
+                      </button>
+                    ))}
+                  </div>
+
                   {/* Photo Mode Switcher */}
                   <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
                     <button
@@ -1152,6 +1216,12 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
                               key={preset.url}
                               type="button"
                               onClick={() => {
+                                setPhotos((prev) => {
+                                  const next = [...prev];
+                                  const slot = prev.length < MAX_PHOTOS ? prev.length : activePhotoSlot;
+                                  next[slot] = preset.url;
+                                  return next.filter(Boolean).slice(0, MAX_PHOTOS);
+                                });
                                 setImage(preset.url);
                                 setCustomImageUrl('');
                               }}
@@ -1186,9 +1256,15 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
                         type="url"
                         value={customImageUrl}
                         onChange={(e) => {
-                          setCustomImageUrl(e.target.value);
-                          if (e.target.value.trim()) {
-                            setImage(e.target.value.trim());
+                          const value = e.target.value;
+                          setCustomImageUrl(value);
+                          if (value.trim()) {
+                            setImage(value.trim());
+                            setPhotos((prev) => {
+                              const next = [...prev];
+                              next[0] = value.trim();
+                              return next.filter(Boolean).slice(0, MAX_PHOTOS);
+                            });
                           }
                         }}
                         placeholder="https://images.unsplash.com/..."
@@ -1197,37 +1273,103 @@ export const EquipmentEditorModal: React.FC<EquipmentEditorModalProps> = ({
                     </div>
                   )}
 
-                  {/* Active Photo Preview */}
-                  <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center gap-4">
-                    {customImageUrl || image ? (
-                      <img
-                        src={customImageUrl || image}
-                        alt="Aperçu photo"
-                        className="w-20 h-20 object-cover rounded-xl border border-slate-200 shadow-xs shrink-0"
-                      />
-                    ) : (
-                      <div className="w-20 h-20 rounded-xl border border-dashed border-slate-300 bg-white flex flex-col items-center justify-center text-slate-400 shrink-0">
-                        <Camera className="w-6 h-6 stroke-1.5" />
-                        <span className="text-[10px] font-medium mt-1">À choisir</span>
-                      </div>
-                    )}
-                    <div className="space-y-1 text-xs">
-                      <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                        {customImageUrl || image ? (
-                          <>
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                            <span>Photo sélectionnée pour l'annonce</span>
-                          </>
-                        ) : (
-                          <span className="text-amber-800 font-semibold">Photo obligatoire requise</span>
-                        )}
-                      </div>
-                      <p className="text-slate-500 text-[11px]">
-                        {customImageUrl || image
-                          ? 'Cette photo apparaîtra en couverture dans le catalogue et sur le contrat PDF.'
-                          : 'Téléversez une photo de votre matériel, sélectionnez un modèle ou indiquez une URL pour valider.'}
-                      </p>
+                  {/* Galerie — 2 photos maximum (1 obligatoire) */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                        Photos de l'annonce
+                      </label>
+                      <span
+                        className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                          photos.filter(Boolean).length >= MAX_PHOTOS
+                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                            : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {photos.filter(Boolean).length} / {MAX_PHOTOS} — 2 photos maximum
+                      </span>
                     </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      {[0, 1].map((slot) => {
+                        const photoUrl = photos[slot];
+                        const isActive = activePhotoSlot === slot;
+                        return (
+                          <div
+                            key={slot}
+                            className={`relative rounded-2xl border overflow-hidden flex flex-col ${
+                              photoUrl
+                                ? 'border-slate-200 bg-white'
+                                : 'border-dashed border-slate-300 bg-slate-50'
+                            } ${isActive ? 'ring-2 ring-amber-400/60' : ''}`}
+                          >
+                            <div className="flex items-center justify-between px-2.5 py-1.5 bg-white border-b border-slate-100">
+                              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                                {slot === 0 ? 'Photo principale (couverture)' : 'Photo secondaire'}
+                              </span>
+                              {photoUrl && (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setActivePhotoSlot(slot as 0 | 1)}
+                                    className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer"
+                                  >
+                                    Remplacer
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => removePhotoAtSlot(slot)}
+                                    aria-label="Retirer cette photo"
+                                    className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {photoUrl ? (
+                              <img
+                                src={photoUrl}
+                                alt={`Photo ${slot + 1} de l'annonce`}
+                                referrerPolicy="no-referrer"
+                                className="w-full aspect-[4/3] object-cover"
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={photos.filter(Boolean).length >= MAX_PHOTOS}
+                                onClick={() => {
+                                  setActivePhotoSlot(slot as 0 | 1);
+                                  setPhotoSourceMode('upload');
+                                  fileInputRef.current?.click();
+                                }}
+                                className={`flex flex-col items-center justify-center gap-1.5 aspect-[4/3] text-slate-400 ${
+                                  photos.filter(Boolean).length >= MAX_PHOTOS
+                                    ? 'opacity-40 cursor-not-allowed'
+                                    : 'hover:text-amber-600 hover:bg-amber-50/40 cursor-pointer'
+                                }`}
+                              >
+                                <Plus className="w-5 h-5" />
+                                <span className="text-[11px] font-semibold">
+                                  {photos.filter(Boolean).length >= MAX_PHOTOS
+                                    ? 'Limite atteinte (2 photos)'
+                                    : slot === 0
+                                      ? 'Ajouter la photo principale'
+                                      : 'Ajouter la photo secondaire'}
+                                </span>
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      La photo principale apparaît en couverture du catalogue, sur la fiche et dans le contrat PDF.
+                      Une seconde photo est possible (détail, accessoire, vue d’ensemble). L’ajout est désactivé
+                      une fois les 2 photos atteintes ; vous pouvez remplacer ou retirer l’une d’elles dans la limite de 2.
+                    </p>
                   </div>
                 </div>
               )}

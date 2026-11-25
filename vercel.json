@@ -12,6 +12,14 @@
       "memory": 1024,
       "maxDuration": 20
     },
+    "api/inspections/delete.ts": {
+      "memory": 512,
+      "maxDuration": 20
+    },
+    "api/inspections/replace.ts": {
+      "memory": 512,
+      "maxDuration": 20
+    },
     "api/cron/renew-cautions.ts": {
       "memory": 1024,
       "maxDuration": 60

@@ -5,10 +5,12 @@ import {
   ApiError,
   applyCors,
   assertClientAmountsMatch,
+  assertNoOverlappingBooking,
   computeServerPricing,
   fetchBookingForUser,
   fetchEquipmentForBooking,
   getSupabaseAdmin,
+  isProduction,
   requireUser,
   toErrorPayload,
   type ServerPricing,
@@ -644,7 +646,17 @@ async function readOwnerConnectState(ownerUserId?: string | null): Promise<Owner
 async function createStripePaymentSession(data: StripeHoldData, customerId?: string): Promise<StripePaymentResult> {
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey || !secretKey.trim()) {
-    console.warn('⚠️ [Stripe] STRIPE_SECRET_KEY non configurée — session paiement ignorée.');
+    // F4 — Production : aucun succès simulé. Sans clé Stripe, on échoue
+    // franchement pour ne jamais laisser croire qu'un paiement est possible.
+    if (isProduction()) {
+      console.error('❌ [Stripe Payment] STRIPE_SECRET_KEY absente en production : session refusée.');
+      return {
+        success: false,
+        error: 'STRIPE_SECRET_KEY manquante en production : le paiement est momentanément indisponible.',
+      };
+    }
+    // Développement local : comportement neutre conservé pour les tests UI.
+    console.warn('⚠️ [Stripe] STRIPE_SECRET_KEY non configurée (dev) — session paiement ignorée.');
     return { success: true };
   }
 
@@ -1025,11 +1037,21 @@ export default async function handler(req: any, res: any) {
 
       const secretKey = process.env.STRIPE_SECRET_KEY;
       if (!secretKey || !secretKey.trim()) {
-        console.warn('⚠️ [Stripe] STRIPE_SECRET_KEY non configurée — simulation de libération.');
+        // F4 — Production : interdiction de renvoyer un succès simulé.
+        // La caution ne peut être marquée libérée sans action Stripe réelle.
+        if (isProduction()) {
+          console.error('❌ [Stripe Caution] STRIPE_SECRET_KEY absente en production : libération refusée.');
+          throw new ApiError(
+            503,
+            'STRIPE_NOT_CONFIGURED_PROD',
+            'Configuration de paiement incomplète : la caution ne peut pas être libérée automatiquement. Contactez le support Matik.'
+          );
+        }
+        console.warn('⚠️ [Stripe] STRIPE_SECRET_KEY non configurée (dev) — simulation de libération.');
         return res.status(200).json({
           success: true,
           simulated: true,
-          message: 'Caution marquée comme libérée (mode simulation sans clé Stripe).',
+          message: 'Caution marquée comme libérée (mode simulation dev sans clé Stripe).',
         });
       }
 
@@ -1308,6 +1330,12 @@ export default async function handler(req: any, res: any) {
         detailsSubmitted: ownerConnect.detailsSubmitted,
       });
     }
+
+    // ─── 2 ter. F2 — DISPONIBILITÉ ANTI-CHEVAUCHEMENT (serveur) ───────────
+    // Refus 409 immédiat si une location active couvre déjà tout ou partie des
+    // dates. La contrainte d'exclusion PostgreSQL (migration 09) reste le
+    // garde-fou final en base.
+    await assertNoOverlappingBooking(equipment.id, pricing.startDate, pricing.endDate);
 
     const bookingId = `MAT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
     console.log(`🏷️ Référence générée : ${bookingId}`);

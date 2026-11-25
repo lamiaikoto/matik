@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
+  AlertTriangle,
   CheckCircle2,
   Copy,
   ExternalLink,
@@ -8,8 +9,10 @@ import {
   Home,
   Lock,
   MapPin,
+  RefreshCw,
   ScanLine,
   ShieldCheck,
+  Trash2,
   Video,
 } from 'lucide-react';
 import { CurrentUser } from '../types';
@@ -19,6 +22,7 @@ import {
   VideoInspection,
   VideoInspectionPrefill,
   buildInspectionShareUrl,
+  deleteInspection,
   fetchMyVideoInspections,
   formatInspectionDate,
 } from '../lib/videoInspectionService';
@@ -56,6 +60,10 @@ export const VideoInspectionPage: React.FC<VideoInspectionPageProps> = ({
   const [mine, setMine] = useState<VideoInspection[]>([]);
   const [loadingMine, setLoadingMine] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [editingInspection, setEditingInspection] = useState<VideoInspection | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const studioRef = useRef<HTMLDivElement | null>(null);
 
   const loadMine = useCallback(async () => {
     if (!currentUser) {
@@ -84,6 +92,36 @@ export const VideoInspectionPage: React.FC<VideoInspectionPageProps> = ({
     } catch {
       setCopiedId(null);
     }
+  };
+
+  /** Refaire la vidéo d'un état des lieux non validé : ouvre le studio en mode remplacement. */
+  const handleRetake = (row: VideoInspection) => {
+    if (row.client_validated_at) return;
+    setActionError(null);
+    setEditingInspection(row);
+    window.setTimeout(() => {
+      studioRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+  };
+
+  /** Suppression définitive (ligne + fichier Storage), créateur ou client (lien). */
+  const handleDelete = async (row: VideoInspection) => {
+    const message = row.client_validated_at
+      ? 'Cet état des lieux est validé par le client. Sa suppression est définitive (vidéo et enregistrement). Continuer ?'
+      : 'Supprimer définitivement cet état des lieux : la vidéo et l’enregistrement seront retirés. Continuer ?';
+    if (!window.confirm(message)) return;
+
+    setDeletingId(row.id);
+    setActionError(null);
+    const result = await deleteInspection(row.id);
+    if (!result.success) {
+      setActionError(result.error || 'Suppression impossible. Réessayez.');
+      setDeletingId(null);
+      return;
+    }
+    setMine((prev) => prev.filter((item) => item.id !== row.id));
+    if (editingInspection?.id === row.id) setEditingInspection(null);
+    setDeletingId(null);
   };
 
   return (
@@ -165,8 +203,34 @@ export const VideoInspectionPage: React.FC<VideoInspectionPageProps> = ({
         </div>
 
         {/* STUDIO */}
-        <section id="studio" className="scroll-mt-24">
-          <VideoInspectionStudio prefill={prefill} onPublished={loadMine} />
+        <section id="studio" ref={studioRef} className="scroll-mt-24 space-y-3">
+          {editingInspection && !editingInspection.client_validated_at && (
+            <div className="flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900">
+              <RefreshCw className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                <strong>Refaite en cours.</strong> Vous remplacez la vidéo de
+                «&nbsp;{editingInspection.item_title}&nbsp;» avant validation du client. Enregistrez la nouvelle
+                séquence puis choisissez « Remplacer la vidéo avant validation client » ; l’ancienne vidéo sera
+                supprimée automatiquement.
+                <button
+                  type="button"
+                  onClick={() => setEditingInspection(null)}
+                  className="ml-2 underline font-bold hover:no-underline cursor-pointer"
+                >
+                  Annuler la refaite
+                </button>
+              </div>
+            </div>
+          )}
+          <VideoInspectionStudio
+            prefill={prefill}
+            onPublished={loadMine}
+            existingInspection={editingInspection}
+            onReplaced={() => {
+              setEditingInspection(null);
+              void loadMine();
+            }}
+          />
         </section>
 
         {/* MES ÉTATS DES LIEUX */}
@@ -184,6 +248,13 @@ export const VideoInspectionPage: React.FC<VideoInspectionPageProps> = ({
                 Actualiser
               </button>
             </div>
+
+            {actionError && (
+              <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs text-rose-800">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>{actionError}</span>
+              </div>
+            )}
 
             {loadingMine && mine.length === 0 ? (
               <p className="text-xs text-slate-500">Chargement…</p>
@@ -232,7 +303,7 @@ export const VideoInspectionPage: React.FC<VideoInspectionPageProps> = ({
                       {inspection.client_validated_at ? (
                         <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-700">
                           <CheckCircle2 className="w-3 h-3" />
-                          Validé client
+                          Validé client · verrouillé
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-50 border border-slate-200 text-[10px] font-bold text-slate-500">
@@ -240,7 +311,36 @@ export const VideoInspectionPage: React.FC<VideoInspectionPageProps> = ({
                         </span>
                       )}
 
-                      <div className="ml-auto flex items-center gap-1.5">
+                      {inspection.client_validated_at && (
+                        <span className="inline-flex items-center gap-1 text-[10px] text-slate-400">
+                          <Lock className="w-3 h-3" />
+                          Aucun remplacement possible ; suppression seulement.
+                        </span>
+                      )}
+
+                      <div className="ml-auto flex items-center gap-1.5 flex-wrap justify-end">
+                        {!inspection.client_validated_at && (
+                          <button
+                            type="button"
+                            onClick={() => handleRetake(inspection)}
+                            disabled={deletingId === inspection.id}
+                            title="Refaire la vidéo avant la validation du client"
+                            className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 text-[10px] font-bold text-amber-800 transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                            Refaire
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(inspection)}
+                          disabled={deletingId === inspection.id}
+                          title="Supprimer la vidéo et l’enregistrement"
+                          className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg border border-rose-200 bg-white hover:bg-rose-50 text-[10px] font-bold text-rose-700 transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          {deletingId === inspection.id ? '…' : 'Supprimer'}
+                        </button>
                         <button
                           type="button"
                           onClick={() => void handleCopy(inspection.id)}

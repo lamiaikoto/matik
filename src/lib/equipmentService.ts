@@ -26,6 +26,8 @@ export interface SupabaseEquipmentRow {
   price_per_day: number;
   deposit_amount: number;
   image_url: string;
+  /** Galerie (migration 10) : 0 à 2 URL. Absente si la migration n'est pas exécutée. */
+  images?: string[] | null;
   owner_id: string;
   is_published: boolean;
   city?: string | null;
@@ -38,6 +40,8 @@ interface EquipmentMetadata {
   city?: string;
   postalCode?: string;
   region?: string;
+  /** Repli historique des photos si la colonne `images` n'existe pas encore. */
+  photos?: string[];
   specs?: { label: string; value: string }[];
   partnerArtisan?: string;
   /** true dès que le loueur a choisi/modifié librement son nom public (annonces récentes). */
@@ -66,12 +70,27 @@ const EQUIPMENT_COLUMNS_BASE = [
   'price_per_day',
   'deposit_amount',
   'image_url',
+  'images',
+  'owner_id',
+  'is_published',
+  'created_at',
+].join(',');
+
+const EQUIPMENT_COLUMNS_BASE_NO_IMAGES = [
+  'id',
+  'title',
+  'description',
+  'category',
+  'price_per_day',
+  'deposit_amount',
+  'image_url',
   'owner_id',
   'is_published',
   'created_at',
 ].join(',');
 
 const EQUIPMENT_COLUMNS_WITH_LOCATION = `${EQUIPMENT_COLUMNS_BASE},city,region,postal_code`;
+const EQUIPMENT_COLUMNS_BASE_LOCATION = `${EQUIPMENT_COLUMNS_BASE_NO_IMAGES},city,region,postal_code`;
 
 const isMissingColumnError = (error: { code?: string; message?: string } | null): boolean =>
   !!error &&
@@ -80,20 +99,21 @@ const isMissingColumnError = (error: { code?: string; message?: string } | null)
     /column .* does not exist/i.test(error.message || ''));
 
 /**
- * Lecture des annonces avec colonnes explicites + repli automatique lorsque la
- * migration 03 (city / region / postal_code) n'a pas encore été exécutée.
- * Dans ce cas, la localisation reste disponible via les métadonnées.
+ * Lecture des annonces avec replis automatiques :
+ *   1. migration 10 (`images`) + migration 03 (localisation) ;
+ *   2. localisation sans `images` (migration 10 non exécutée) ;
+ *   3. colonnes de base uniquement.
  */
 const selectEquipments = async (applyFilters: (query: any) => any): Promise<any> => {
   const run = (columns: string) => applyFilters(supabase.from('equipments').select(columns));
 
-  const firstName = await run(EQUIPMENT_COLUMNS_WITH_LOCATION);
-  if (!isMissingColumnError(firstName.error)) return firstName;
+  const withAll = await run(EQUIPMENT_COLUMNS_WITH_LOCATION);
+  if (!isMissingColumnError(withAll.error)) return withAll;
 
-  console.warn(
-    '[Supabase equipments] Colonnes de localisation absentes — exécutez supabase/migrations/03_add_location_fields.sql. Repli sur les métadonnées.'
-  );
-  return await run(EQUIPMENT_COLUMNS_BASE);
+  const withoutImages = await run(EQUIPMENT_COLUMNS_BASE_LOCATION);
+  if (!isMissingColumnError(withoutImages.error)) return withoutImages;
+
+  return await run(EQUIPMENT_COLUMNS_BASE_NO_IMAGES);
 };
 
 /**
@@ -161,6 +181,18 @@ export const encodeDescriptionWithMetadata = (
 export const mapSupabaseRowToEquipment = (row: SupabaseEquipmentRow): Equipment => {
   const { cleanDescription, metadata } = parseDescriptionWithMetadata(row.description);
 
+  // 2 photos maximum : photo principale (image_url) + une seconde photo issue
+  // de la colonne `images` (migration 10) ou du repli métadonnées `photos`.
+  const imageList = Array.isArray(row.images)
+    ? row.images
+    : Array.isArray(metadata.photos)
+      ? metadata.photos
+      : [];
+  const extraPhotos = imageList
+    .filter((p): p is string => typeof p === 'string' && !!p && p !== row.image_url)
+    .slice(0, 1);
+  const photos = row.image_url ? [row.image_url, ...extraPhotos] : extraPhotos;
+
   return {
     id: row.id,
     name: row.title || 'Équipement sans titre',
@@ -168,6 +200,7 @@ export const mapSupabaseRowToEquipment = (row: SupabaseEquipmentRow): Equipment 
     dailyRate: Number(row.price_per_day) || 0,
     depositAmount: Number(row.deposit_amount) || 0,
     image: row.image_url || '',
+    photos: photos.length > 0 ? photos : undefined,
     description: cleanDescription || 'Équipement vérifié et garanti avec caution sécurisée Stripe sans débit.',
     partnerArtisan: resolvePublicDisplayName(
       metadata.partnerArtisan,
@@ -284,9 +317,16 @@ export const saveEquipmentToSupabase = async (
       tags: equipment.tags || [],
       ownerType: equipment.ownerType || 'particulier',
       ownerName: equipment.ownerName || equipment.partnerArtisan || '',
+      // Repli historique : si la colonne `images` n'existe pas encore, la
+      // galerie est conservée dans les métadonnées de description.
+      photos: Array.isArray(equipment.photos) ? equipment.photos.slice(0, 2) : undefined,
     };
 
     const finalDescription = encodeDescriptionWithMetadata(equipment.description, metadata);
+
+    const galleryPhotos = Array.isArray(equipment.photos)
+      ? equipment.photos.filter((p): p is string => typeof p === 'string' && !!p).slice(0, 2)
+      : [];
 
     const basePayload = {
       id: finalId,
@@ -296,6 +336,7 @@ export const saveEquipmentToSupabase = async (
       price_per_day: Number(equipment.dailyRate),
       deposit_amount: Number(equipment.depositAmount),
       image_url: equipment.image,
+      images: galleryPhotos.length > 0 ? galleryPhotos : null,
       is_published: isPublished, // ✅ Toujours true par défaut pour visibilité dans le catalogue public
       ...(effectiveOwnerId && isValidUUID(effectiveOwnerId) ? { owner_id: effectiveOwnerId } : {}),
       created_at: equipment.createdAt || new Date().toISOString(),
@@ -313,9 +354,19 @@ export const saveEquipmentToSupabase = async (
       .select()
       .single();
 
-    // Les colonnes de localisation peuvent ne pas encore exister (migration 03 non exécutée).
-    // On réessaie alors sans elles : ville, région et code postal restent enregistrés
-    // dans les métadonnées de la description, donc aucune donnée n'est perdue.
+    // Colonnes optionnelles absentes (migration 03 localisation et/ou
+    // migration 10 `images`) : on retire d'abord `images`, puis la
+    // localisation, sans perdre les autres champs (métadonnées de secours).
+    if (error && isMissingColumnError(error)) {
+      const payloadWithoutImages = { ...basePayload };
+      delete (payloadWithoutImages as { images?: unknown }).images;
+      ({ data, error } = await supabase
+        .from('equipments')
+        .upsert({ ...payloadWithoutImages, ...locationPayload }, { onConflict: 'id' })
+        .select()
+        .single());
+    }
+
     if (
       error &&
       (error.code === '42703' ||
@@ -323,11 +374,13 @@ export const saveEquipmentToSupabase = async (
         /column .* does not exist/i.test(error.message || ''))
     ) {
       console.warn(
-        '[Supabase equipments] Colonnes de localisation absentes — exécutez supabase/migrations/03_add_location_fields.sql. Enregistrement via métadonnées.'
+        '[Supabase equipments] Colonnes optionnelles absentes — enregistrement minimal (métadonnées de secours conservées).'
       );
+      const payloadWithoutImages = { ...basePayload };
+      delete (payloadWithoutImages as { images?: unknown }).images;
       ({ data, error } = await supabase
         .from('equipments')
-        .upsert(basePayload, { onConflict: 'id' })
+        .upsert(payloadWithoutImages, { onConflict: 'id' })
         .select()
         .single());
     }

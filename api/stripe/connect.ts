@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { applyCors } from '../lib/bookingSecurity';
 
 /**
  * Route 100 % autonome : aucun import local, donc aucune dépendance à
@@ -27,15 +28,14 @@ const getPublicAppUrl = (): string => {
 };
 
 export default async function handler(req: any, res: any) {
-  // En-têtes CORS
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+  // F3 — CORS aligné sur les autres routes API : origines de la liste
+  // autorisée (APP_URL / ALLOWED_ORIGINS / même origine) uniquement,
+  // credentials: true seulement quand l'origine est autorisée. Plus de
+  // renvoi de `req.headers.origin || '*'` avec credentials.
+  applyCors(req, res, req.headers?.host);
 
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(204).end();
   }
 
   if (req.method !== 'POST') {
@@ -78,8 +78,13 @@ export default async function handler(req: any, res: any) {
     }
 
     const stripe = new Stripe(secretKey, { apiVersion: '2024-11-20.acacia' } as any);
-    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
-    const action = body.action || 'create_account';
+    let body: Record<string, unknown>;
+    try {
+      body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    } catch {
+      return res.status(400).json({ success: false, error: 'Corps de requête JSON invalide.' });
+    }
+    const action = String(body.action || 'create_account');
 
     // Compte Connect enregistré dans les métadonnées de l'utilisateur
     const { data: userData } = await supabaseAdmin.auth.admin.getUserById(user.id);

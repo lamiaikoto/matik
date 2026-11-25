@@ -392,46 +392,19 @@ export interface BookingWriteResult {
   code?: string;
 }
 
-/** Insère une nouvelle réservation (statut initial `pending_payment`). */
-export const insertBookingRecord = async (booking: BookingRecord): Promise<BookingWriteResult> => {
-  const userId = await getAuthUserId();
-  if (!userId) {
-    return { success: false, error: 'AUTH_REQUIRED', code: 'AUTH_REQUIRED' };
-  }
-
-  const insert = async (row: ReturnType<typeof toInsertRow>) =>
-    supabase.from('bookings').insert(row).select(BOOKING_PUBLIC_COLUMNS).single();
-
-  try {
-    let { data, error } = await insert(toInsertRow(booking, userId));
-
-    // 23503 = violation de clé étrangère (annonce supprimée entre-temps) :
-    // on conserve la réservation avec un snapshot texte de l'équipement.
-    if (error && (error as { code?: string }).code === '23503') {
-      const fallback = { ...toInsertRow(booking, userId), equipment_id: null };
-      ({ data, error } = await insert(fallback));
-    }
-
-    if (error) {
-      // 23505 = la réservation existe déjà (double-clic ou reprise après timeout réseau) :
-      // on la considère comme enregistrée pour éviter de bloquer la redirection Stripe.
-      if ((error as { code?: string }).code === '23505') {
-        const existing = await fetchBookingById(booking.id);
-        if (existing) return { success: true, booking: existing };
-      }
-
-      console.warn('[Supabase bookings] Insertion refusée :', error.message);
-      return { success: false, error: error.message, code: (error as { code?: string }).code };
-    }
-
-    return {
-      success: true,
-      booking: mapSupabaseBookingToRecord(data as unknown as SupabaseBookingRow),
-    };
-  } catch (err) {
-    console.error('[Supabase bookings] Exception insertBookingRecord :', err);
-    return { success: false, error: err instanceof Error ? err.message : 'Erreur inconnue' };
-  }
+/**
+ * @deprecated F1 — l'insertion directe est désormais interdite en base
+ * (migration 09 : REVOKE INSERT + trigger `guard_booking_insert`). La seule
+ * écriture de création est l'API `/api/booking` (service_role). Le client se
+ * contente de rafraîchir la liste via `fetchBookingsForUser()` après succès.
+ * Cette fonction reste exportée pour compatibilité mais ne persiste rien.
+ */
+export const insertBookingRecord = async (_booking: BookingRecord): Promise<BookingWriteResult> => {
+  return {
+    success: false,
+    error: 'Création directe désactivée : la réservation passe par l’API Matik.',
+    code: 'DIRECT_INSERT_DISABLED',
+  };
 };
 
 /** Met à jour une réservation (statut, caution, états des lieux, litige). */

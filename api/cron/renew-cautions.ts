@@ -49,13 +49,13 @@ interface RenewalResult {
  * - Si échec : consigne l'erreur et marque la réservation caution_renewal_failed pour alerte dans l'Espace Loueur
  */
 export default async function handler(req: any, res: any) {
-  // CORS Headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  // F12 — Cron interne Vercel. La plateforme envoie systématiquement
+  // `Authorization: Bearer ${CRON_SECRET}` ; aucun navigateur n'appelle cette
+  // route. On ne renvoie donc pas de CORS utilisateur (pas d'origine de naviguateur).
+  res.setHeader('Cache-Control', 'no-store');
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return res.status(204).end();
   }
 
   const startTime = Date.now();

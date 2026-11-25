@@ -37,6 +37,7 @@ export interface VideoInspection {
   location_lat: number | null;
   location_lng: number | null;
   client_validated_at: string | null;
+  replaced_at: string | null;
   created_at: string;
 }
 
@@ -140,7 +141,10 @@ const normalizeMimeType = (mimeType: string): string => {
   return 'video/webm';
 };
 
-/** Téléverse la vidéo et renvoie son URL publique non listée. */
+/** Téléverse la vidéo et renvoie son URL publique non listée.
+ *  F5 — chemin rangé par préfixe : `<uid>/<date>/<uuid>.ext` pour un compte,
+ *  `anon/<date>/<uuid>.ext` pour le mode rapide sans compte (politiques bucket).
+ */
 export async function uploadInspectionVideo(
   blob: Blob,
   mimeType: string
@@ -149,7 +153,16 @@ export async function uploadInspectionVideo(
   const extension =
     contentType === 'video/mp4' ? 'mp4' : contentType === 'video/quicktime' ? 'mov' : 'webm';
   const dateFolder = new Date().toISOString().slice(0, 10);
-  const path = `${dateFolder}/${generateId()}.${extension}`;
+
+  let ownerFolder = 'anon';
+  try {
+    const { data } = await supabase.auth.getUser();
+    if (data?.user?.id) ownerFolder = data.user.id;
+  } catch {
+    ownerFolder = 'anon';
+  }
+
+  const path = `${ownerFolder}/${dateFolder}/${generateId()}.${extension}`;
 
   const { error } = await supabase.storage
     .from(INSPECTION_VIDEOS_BUCKET)
@@ -162,7 +175,7 @@ export async function uploadInspectionVideo(
   if (error) {
     throw new Error(
       error.message.includes('Bucket not found')
-        ? "Le stockage des vidéos n'est pas encore configuré (migration 08 à exécuter)."
+        ? "Le stockage des vidéos n'est pas encore configuré (migration 08/11 à exécuter)."
         : `Envoi de la vidéo impossible : ${error.message}`
     );
   }
@@ -253,7 +266,7 @@ export async function fetchMyVideoInspections(): Promise<VideoInspection[]> {
     const { data, error } = await supabase
       .from('video_inspections')
       .select(
-        'id,item_title,category,inspection_type,notes,video_url,video_mime_type,video_duration_seconds,server_timestamp,timezone,location_label,location_lat,location_lng,client_validated_at,created_at'
+        'id,item_title,category,inspection_type,notes,video_url,video_mime_type,video_duration_seconds,server_timestamp,timezone,location_label,location_lat,location_lng,client_validated_at,replaced_at,created_at'
       )
       .order('created_at', { ascending: false })
       .limit(20);
@@ -285,5 +298,105 @@ export function formatInspectionDate(value: string, timezone?: string | null): s
     }).format(new Date(value));
   } catch {
     return new Date(value).toLocaleString('fr-FR');
+  }
+}
+
+// ─── Workflow : suppression et remplacement (routes service_role) ───────────
+
+const getAuthToken = async (): Promise<string | null> => {
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token || null;
+  } catch {
+    return null;
+  }
+};
+
+const jsonPost = async (path: string, payload: Record<string, unknown>, includeToken: boolean) => {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
+  if (includeToken) {
+    const token = await getAuthToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+  }
+  const response = await fetch(path, { method: 'POST', headers, body: JSON.stringify(payload) });
+  const data = await response.json().catch(() => ({}));
+  return { ok: response.ok, status: response.status, data };
+};
+
+/**
+ * Supprime un état des lieux (ligne + vidéo Storage).
+ * Autorisé pour le créateur connecté comme pour le détenteur du lien privé
+ * (locataire/client), après confirmation côté interface.
+ */
+export async function deleteInspection(id: string): Promise<{ success: boolean; error?: string; code?: string }> {
+  if (!id) return { success: false, error: 'Identifiant manquant.' };
+  try {
+    const { ok, data } = await jsonPost('/api/inspections/delete', { id }, true);
+    if (!ok) {
+      return { success: false, error: data?.error || 'Suppression impossible.', code: data?.code };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Erreur réseau de suppression.' };
+  }
+}
+
+/** Payload d'une refaite avant validation client. */
+export interface InspectionReplaceDraft {
+  id: string;
+  itemTitle: string;
+  category: VideoInspectionCategory;
+  inspectionType: VideoInspectionType;
+  notes?: string;
+  videoBlob: Blob;
+  mimeType: string;
+  durationSeconds: number;
+}
+
+/**
+ * Refait la vidéo d'un état des lieux NON validé :
+ *   1. téléverse la nouvelle vidéo (bucket) ;
+ *   2. appelle l'API service_role qui vérifie le créateur, rejette une ligne
+ *      validée, supprime l'ancienne vidéo et met à jour la métadonnée.
+ */
+export async function replaceInspectionVideo(
+  draft: InspectionReplaceDraft
+): Promise<{ success: boolean; videoUrl?: string; error?: string; code?: string }> {
+  let upload: { path: string; publicUrl: string; contentType: string } | null = null;
+  try {
+    upload = await uploadInspectionVideo(draft.videoBlob, draft.mimeType);
+
+    const { ok, data } = await jsonPost(
+      '/api/inspections/replace',
+      {
+        id: draft.id,
+        videoUrl: upload.publicUrl,
+        videoPath: upload.path,
+        contentType: upload.contentType,
+        durationSeconds: draft.durationSeconds,
+        itemTitle: draft.itemTitle,
+        category: draft.category,
+        inspectionType: draft.inspectionType,
+        notes: draft.notes || '',
+      },
+      true
+    );
+
+    if (!ok) {
+      // Nouvelle vidéo orpheline : on la retire du Storage si l'API a refusé.
+      try {
+        await supabase.storage.from(INSPECTION_VIDEOS_BUCKET).remove([upload.path]);
+      } catch {}
+      return { success: false, error: data?.error || 'Remplacement impossible.', code: data?.code };
+    }
+
+    return { success: true, videoUrl: data.videoUrl || upload.publicUrl };
+  } catch (err: any) {
+    if (upload) {
+      try {
+        await supabase.storage.from(INSPECTION_VIDEOS_BUCKET).remove([upload.path]);
+      } catch {}
+    }
+    return { success: false, error: err?.message || 'Erreur réseau de remplacement.' };
   }
 }

@@ -42,6 +42,16 @@ export class ApiError extends Error {
 
 export const isUuid = (value?: string | null): boolean => !!value && UUID_RE.test(value);
 
+/** Environnement de production Vercel (NODE_ENV === 'production'). */
+export const isProduction = (): boolean => (process.env.NODE_ENV || '').trim() === 'production';
+
+/** Statuts qui rendent le calendrier indisponible (F2 anti-chevauchement). */
+export const ACTIVE_OVERLAP_STATUSES = [
+  'en_attente_remise',
+  'en_cours',
+  'restitution_signalee',
+] as const;
+
 /** Sous-ensemble de `req` utilisé ici (compatible Vercel, Edge et Express). */
 export interface RequestLike {
   headers: Record<string, string | string[] | undefined>;
@@ -300,6 +310,67 @@ export const assertClientAmountsMatch = (body: Record<string, unknown>, pricing:
     )} €. Rechargez la page puis validez à nouveau le nouveau montant.`,
     { pricing }
   );
+};
+
+// ─── Anti-chevauchement des plages (F2) ─────────────────────────────────────
+
+/**
+ * Vérifie qu'aucune réservation active ne couvre déjà les dates demandées.
+ *
+ * Règle semi-ouverte `[)` : un retour le jour J ne bloque pas une nouvelle
+ * location commençant le jour J. Concrètement :
+ *   ancienne.start_date <= nouvelle.end_date
+ *   ancienne.end_date   >= nouvelle.start_date
+ *
+ * La contrainte d'exclusion PostgreSQL (migration 09) fait foi en base ; ce
+ * contrôle serveur renvoie une réponse 409 exploitable par le formulaire
+ * avant toute création de session Stripe.
+ */
+export const assertNoOverlappingBooking = async (
+  equipmentId: string,
+  startDate: string,
+  endDate: string,
+  excludeBookingId?: string
+): Promise<void> => {
+  if (!isUuid(equipmentId) || !/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    throw new ApiError(400, 'INVALID_DATES', 'Dates ou annonce invalides pour la vérification de disponibilité.');
+  }
+
+  const admin = getSupabaseAdmin();
+  let query = admin
+    .from('bookings')
+    .select('id, status, start_date, end_date, equipment_name')
+    .eq('equipment_id', equipmentId)
+    .in('status', ACTIVE_OVERLAP_STATUSES)
+    // Chevauchement semi-ouvert : ancienne.start < nouvelle.end ET ancienne.end > nouvelle.start
+    // (une location finissant le jour J ne bloque pas une location commençant le jour J).
+    .lt('start_date', endDate)
+    .gt('end_date', startDate);
+
+  if (excludeBookingId) {
+    query = query.neq('id', excludeBookingId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new ApiError(503, 'AVAILABILITY_CHECK_FAILED', 'Impossible de vérifier les disponibilités. Réessayez dans un instant.');
+  }
+
+  const conflicts = (data || []).filter((row: any) => {
+    const rowStart = String(row.start_date || '').slice(0, 10);
+    const rowEnd = String(row.end_date || '').slice(0, 10);
+    return rowStart < endDate && rowEnd > startDate;
+  });
+
+  if (conflicts.length > 0) {
+    throw new ApiError(
+      409,
+      'EQUIPMENT_UNAVAILABLE_DATES',
+      'Cet équipement est déjà réservé sur tout ou partie de ces dates. Choisissez d’autres dates ou un autre matériel.',
+      { conflictingBookingIds: conflicts.map((row: any) => row.id) }
+    );
+  }
 };
 
 // ─── Autorisation par ressource ──────────────────────────────────────────────

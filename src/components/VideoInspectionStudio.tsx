@@ -21,18 +21,27 @@ import {
 import {
   VIDEO_INSPECTION_CATEGORY_LABELS,
   VIDEO_INSPECTION_TYPE_SHORT,
+  VideoInspection,
   VideoInspectionCategory,
   VideoInspectionPrefill,
   VideoInspectionType,
   buildInspectionShareUrl,
   createVideoInspection,
   getServerTimeOffset,
+  replaceInspectionVideo,
 } from '../lib/videoInspectionService';
 
 export interface VideoInspectionStudioProps {
   prefill?: VideoInspectionPrefill | null;
   /** Appelé après publication, pour rafraîchir la liste « mes états des lieux ». */
   onPublished?: () => void;
+  /**
+   * Refaite d'un état des lieux NON validé : la nouvelle vidéo remplace l'ancienne
+   * via l'API service_role. La validation client bloque toute modification.
+   */
+  existingInspection?: VideoInspection | null;
+  /** Appelé après un remplacement réussi. */
+  onReplaced?: () => void;
 }
 
 type CameraState = 'idle' | 'starting' | 'ready' | 'error';
@@ -140,13 +149,19 @@ const drawWrappedText = (
 export const VideoInspectionStudio: React.FC<VideoInspectionStudioProps> = ({
   prefill,
   onPublished,
+  existingInspection = null,
+  onReplaced,
 }) => {
-  const [itemTitle, setItemTitle] = useState(prefill?.itemTitle || '');
-  const [category, setCategory] = useState<VideoInspectionCategory>(prefill?.category || 'logement');
-  const [inspectionType, setInspectionType] = useState<VideoInspectionType>(
-    prefill?.inspectionType || 'entree'
+  const lockedAfterValidation = Boolean(existingInspection?.client_validated_at);
+
+  const [itemTitle, setItemTitle] = useState(prefill?.itemTitle || existingInspection?.item_title || '');
+  const [category, setCategory] = useState<VideoInspectionCategory>(
+    prefill?.category || existingInspection?.category || 'logement'
   );
-  const [notes, setNotes] = useState(prefill?.notes || '');
+  const [inspectionType, setInspectionType] = useState<VideoInspectionType>(
+    prefill?.inspectionType || existingInspection?.inspection_type || 'entree'
+  );
+  const [notes, setNotes] = useState(prefill?.notes || existingInspection?.notes || '');
   const [maxDuration, setMaxDuration] = useState<number>(45);
 
   const [cameraState, setCameraState] = useState<CameraState>('idle');
@@ -587,11 +602,37 @@ export const VideoInspectionStudio: React.FC<VideoInspectionStudioProps> = ({
 
   const handlePublish = useCallback(async () => {
     if (!recorded) return;
+    if (lockedAfterValidation) {
+      setError('Cet état des lieux est validé par le client : la vidéo ne peut plus être modifiée. Seule la suppression est possible.');
+      return;
+    }
 
     setIsPublishing(true);
     setError(null);
 
     try {
+      // Mode refaite avant validation client : remplacement via l'API.
+      if (existingInspection && !existingInspection.client_validated_at) {
+        const rep = await replaceInspectionVideo({
+          id: existingInspection.id,
+          itemTitle,
+          category,
+          inspectionType,
+          notes,
+          videoBlob: recorded.blob,
+          mimeType: recorded.mimeType,
+          durationSeconds: recorded.durationSeconds,
+        });
+        if (!rep.success) {
+          throw new Error(rep.error || 'Le remplacement de la vidéo a échoué.');
+        }
+        setPublished({ id: existingInspection.id, url: buildInspectionShareUrl(existingInspection.id) });
+        setNotice('Vidéo remplacée avant la validation du client.');
+        onReplaced?.();
+        stopStream();
+        return;
+      }
+
       const result = await createVideoInspection({
         itemTitle,
         category,
@@ -614,7 +655,19 @@ export const VideoInspectionStudio: React.FC<VideoInspectionStudioProps> = ({
     } finally {
       setIsPublishing(false);
     }
-  }, [category, inspectionType, itemTitle, location, notes, onPublished, recorded, stopStream]);
+  }, [
+    category,
+    existingInspection,
+    inspectionType,
+    itemTitle,
+    location,
+    lockedAfterValidation,
+    notes,
+    onPublished,
+    onReplaced,
+    recorded,
+    stopStream,
+  ]);
 
   const handleCopy = useCallback(async (url: string) => {
     try {
@@ -682,6 +735,14 @@ export const VideoInspectionStudio: React.FC<VideoInspectionStudioProps> = ({
           Horodatage serveur
         </span>
       </div>
+
+      {lockedAfterValidation && existingInspection && (
+        <div className="mx-5 sm:mx-7 mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs leading-relaxed text-rose-800">
+          <strong>Preuve validée par le client.</strong> La vidéo ne peut plus être modifiée ni remplacée afin de
+          conserver la preuve intacte. Seule la suppression (liste des états des lieux ou page de partage) est
+          autorisée.
+        </div>
+      )}
 
       <div className="p-5 sm:p-7 space-y-6">
         {/* ── Formulaire ── */}
@@ -855,11 +916,15 @@ export const VideoInspectionStudio: React.FC<VideoInspectionStudioProps> = ({
               <button
                 type="button"
                 onClick={() => void startRecording()}
-                disabled={isPreparing || isPublishing || Boolean(recorded)}
+                disabled={isPreparing || isPublishing || Boolean(recorded) || lockedAfterValidation}
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-extrabold uppercase tracking-wider transition-colors cursor-pointer"
               >
                 <Camera className="w-4 h-4 text-amber-400" />
-                {isPreparing ? 'Synchronisation…' : 'Démarrer l’enregistrement'}
+                {lockedAfterValidation
+                  ? 'Vidéo verrouillée après validation'
+                  : isPreparing
+                    ? 'Synchronisation…'
+                    : 'Démarrer l’enregistrement'}
               </button>
             ) : (
               <button
@@ -882,15 +947,16 @@ export const VideoInspectionStudio: React.FC<VideoInspectionStudioProps> = ({
               Caméra {facingMode === 'environment' ? 'arrière' : 'avant'}
             </button>
 
-            {recorded && !isRecording && (
+            {recorded && !isRecording && !lockedAfterValidation && (
               <button
                 type="button"
                 onClick={resetAll}
                 disabled={isPublishing}
+                title="Supprime la prise en cours et relance la caméra avant publication"
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
               >
                 <RefreshCw className="w-4 h-4" />
-                Recommencer
+                Recommencer la prise
               </button>
             )}
 
@@ -922,7 +988,9 @@ export const VideoInspectionStudio: React.FC<VideoInspectionStudioProps> = ({
                 ) : (
                   <UploadCloud className="w-4 h-4" />
                 )}
-                {isPublishing ? 'Envoi de la vidéo…' : 'Valider et générer le lien client'}
+                {isPublishing ? 'Envoi de la vidéo…' : existingInspection && !existingInspection.client_validated_at
+                  ? 'Remplacer la vidéo avant validation client'
+                  : 'Valider et générer le lien client'}
               </button>
             </div>
           )}

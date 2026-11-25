@@ -72,7 +72,6 @@ import { sendConfirmationEmailAfterValidation, releaseStripeCautionApi, syncCaut
 import {
   fetchBookingsForUser,
   fetchBookingById,
-  insertBookingRecord,
   updateBookingRecord,
   deleteBookingRecord,
   subscribeToBookings,
@@ -299,10 +298,11 @@ export default function App() {
   const applyStripeReturn = async (stripeStatus: string, bookingRef: string | null) => {
     // ── CAS 1 : paiement de la location validé → empreinte de caution ──
     if (stripeStatus === 'payment_ok') {
-      if (bookingRef) {
-        // Trace le paiement : une annulation de la caution ne doit jamais effacer une location payée.
-        await updateBookingRecord(bookingRef, { paymentConfirmedAt: new Date().toISOString() });
-      }
+      // La confirmation de paiement est enregistrée par le webhook Stripe
+      // (service_role) ; le client ne marque plus `payment_confirmed_at`.
+      void fetchBookingsForUser()
+        .then((rows) => { if (rows.length) setBookingList(rows); })
+        .catch(() => {});
 
       let cautionUrl = bookingRef ? sessionStorage.getItem(`matik_caution_url_${bookingRef}`) : null;
       if (!cautionUrl) cautionUrl = sessionStorage.getItem('matik_last_caution_url');
@@ -357,6 +357,12 @@ export default function App() {
         found = updated.booking || ({ ...found, ...patch } as BookingRecord);
       }
 
+      // Recalcule la ligne depuis la base après les écritures serveur/webhook.
+      try {
+        const refreshed = await fetchBookingsForUser();
+        if (refreshed.length > 0) setBookingList(refreshed);
+      } catch {}
+
       if (found) {
         const confirmed: BookingRecord = found;
 
@@ -390,9 +396,11 @@ export default function App() {
                 console.warn('⚠️ [Stripe Flow] Récapitulatif non envoyé :', res.error);
                 return;
               }
-              return updateBookingRecord(confirmed.id, {
-                confirmationEmailSentAt: new Date().toISOString(),
-              });
+              // L'horodatage `confirmation_email_sent_at` est posé côté API
+              // (service_role) ; on rafraîchit la liste pour le refléter.
+              return fetchBookingsForUser()
+                .then((rows) => { if (rows.length) setBookingList(rows); })
+                .catch(() => {});
             })
             .catch((e) => console.warn('Erreur envoi email récapitulatif :', e));
         }
@@ -1061,24 +1069,19 @@ export default function App() {
       } catch {}
     }
 
-    // Mise à jour optimiste, puis persistance réelle dans Supabase.
-    // En cas d'échec, on annule l'affichage et on bloque la redirection Stripe :
-    // jamais de paiement sans réservation enregistrée côté loueur.
+    // Affichage optimiste immédiat. La ligne réelle a déjà été créée par
+    // l'API `/api/booking` (service_role) avant ce retour : F1 interdit toute
+    // insertion directe depuis le client (migration 09). On rafraîchit la
+    // liste en arrière-plan pour aligner statuts et identifiants Stripe réels.
     setBookingList((prev) => [newBooking, ...prev.filter((b) => b.id !== newBooking.id)]);
 
-    const result = await insertBookingRecord(newBooking);
-    if (!result.success) {
-      setBookingList((prev) => prev.filter((b) => b.id !== newBooking.id));
-      console.error('[Booking] Enregistrement Supabase impossible :', result.error);
-      throw new Error(
-        result.error === 'AUTH_REQUIRED'
-          ? 'Connectez-vous pour finaliser votre réservation.'
-          : `Impossible d'enregistrer la réservation (${result.error || 'erreur base de données'}). Aucun paiement n'a été effectué.`
-      );
-    }
-
-    if (result.booking) {
-      setBookingList((prev) => [result.booking as BookingRecord, ...prev.filter((b) => b.id !== (result.booking as BookingRecord).id)]);
+    try {
+      const refreshed = await fetchBookingsForUser();
+      if (refreshed.length > 0) {
+        setBookingList(refreshed);
+      }
+    } catch (err) {
+      console.warn('[Booking] Rafraîchissement post-réservation indisponible :', err);
     }
 
     // La réservation est bien en base : on peut afficher la confirmation

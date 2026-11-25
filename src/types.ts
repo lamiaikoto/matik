@@ -5,6 +5,8 @@ export interface Equipment {
   dailyRate: number;
   depositAmount: number; // Caution fixée par le loueur
   image: string;
+  /** Galerie courte : 2 photos maximum (photos[0] = image principal). */
+  photos?: string[];
   description: string;
   specs: {
     label: string;

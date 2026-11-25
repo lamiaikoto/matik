@@ -125,8 +125,7 @@ export const EquipmentDetails: React.FC<EquipmentDetailsProps> = ({
                       referrerPolicy="no-referrer"
                       decoding="async"
                       className="w-full h-full object-cover"
-                    />
-                    {/* Top-right: Availability badge */}
+                    />                    {/* Top-right: Availability badge */}
                     <div className="absolute top-3 right-3 z-10">
                       {availability.isRented ? (
                         <div className="px-3 py-1.5 rounded-xl bg-rose-600/95 backdrop-blur-md text-white text-xs font-black border border-rose-500 shadow-md flex items-center gap-1.5 tracking-wide animate-pulse">
@@ -146,6 +145,22 @@ export const EquipmentDetails: React.FC<EquipmentDetailsProps> = ({
                       )}
                     </div>
                   </div>
+
+                  {/* Seconde photo éventuelle (2 photos maximum par annonce) */}
+                  {equipment.photos && equipment.photos.length > 1 && equipment.photos[1] && (
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Vue complémentaire
+                      </span>
+                      <img
+                        src={equipment.photos[1]}
+                        alt={`${equipment.name} — vue complémentaire`}
+                        referrerPolicy="no-referrer"
+                        loading="lazy"
+                        className="w-full aspect-[4/3] object-cover rounded-xl border border-slate-200 bg-slate-100"
+                      />
+                    </div>
+                  )}
 
                   {/* Trust highlight banner */}
                   <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200/90 text-xs text-amber-900 flex items-start gap-2.5">
