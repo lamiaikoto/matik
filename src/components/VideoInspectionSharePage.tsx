@@ -184,7 +184,11 @@ export const VideoInspectionSharePage: React.FC<VideoInspectionSharePageProps> =
           <div className="rounded-3xl border border-red-200 bg-red-50 p-8 space-y-3 text-center">
             <AlertCircle className="w-8 h-8 text-red-500 mx-auto" />
             <h1 className="text-sm font-black text-red-900">Lien indisponible</h1>
-            <p className="text-xs text-red-800 leading-relaxed max-w-md mx-auto">{error}</p>
+            <p className="text-xs text-red-800 leading-relaxed max-w-md mx-auto">
+              {typeof error === 'object' && error !== null
+                ? (error as any).message || (error as any).error || JSON.stringify(error)
+                : String(error)}
+            </p>
             <button
               type="button"
               onClick={onNavigateHome}
@@ -346,7 +350,9 @@ export const VideoInspectionSharePage: React.FC<VideoInspectionSharePageProps> =
 
                       {validationError && (
                         <p className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                          {validationError}
+                          {typeof validationError === 'object' && validationError !== null
+                            ? (validationError as any).message || (validationError as any).error || JSON.stringify(validationError)
+                            : String(validationError)}
                         </p>
                       )}
 
@@ -370,7 +376,9 @@ export const VideoInspectionSharePage: React.FC<VideoInspectionSharePageProps> =
                   <div className="border-t border-slate-200 pt-3 space-y-2">
                     {deleteError && (
                       <p className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                        {deleteError}
+                        {typeof deleteError === 'object' && deleteError !== null
+                          ? (deleteError as any).message || (deleteError as any).error || JSON.stringify(deleteError)
+                          : String(deleteError)}
                       </p>
                     )}
                     <button

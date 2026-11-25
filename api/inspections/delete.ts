@@ -15,13 +15,13 @@
  *   - après validation client : suppression encore possible, mais aucune
  *     modification ni remplacement (verrou porté par la migration 11).
  */
-import { applyCors, ApiError, toErrorPayload } from '../lib/bookingSecurity';
+import { applyCors, ApiError, toErrorPayload } from '../lib/bookingSecurity.js';
 import {
   authorizeInspectionAccess,
   fetchInspectionRow,
   getInspectionAdmin,
   removeInspectionVideoObject,
-} from '../lib/inspections';
+} from '../lib/inspections.js';
 
 export default async function handler(req: any, res: any) {
   applyCors(req, res, req.headers?.host);

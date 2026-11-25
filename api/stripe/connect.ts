@@ -1,6 +1,6 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
-import { applyCors } from '../lib/bookingSecurity';
+import { applyCors } from '../lib/bookingSecurity.js';
 
 /**
  * Route 100 % autonome : aucun import local, donc aucune dépendance à

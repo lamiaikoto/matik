@@ -14,7 +14,7 @@ import {
   requireUser,
   toErrorPayload,
   type ServerPricing,
-} from './lib/bookingSecurity';
+} from './lib/bookingSecurity.js';
 
 // ─── TYPES ──────────────────────────────────────────────────
 export interface ContractData {

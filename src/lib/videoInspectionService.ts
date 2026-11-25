@@ -323,6 +323,15 @@ const jsonPost = async (path: string, payload: Record<string, unknown>, includeT
   return { ok: response.ok, status: response.status, data };
 };
 
+const formatApiError = (err: unknown, fallback: string): string => {
+  if (!err) return fallback;
+  if (typeof err === 'string') return err;
+  if (typeof err === 'object' && err !== null) {
+    return (err as any).message || (err as any).error || JSON.stringify(err);
+  }
+  return String(err);
+};
+
 /**
  * Supprime un état des lieux (ligne + vidéo Storage).
  * Autorisé pour le créateur connecté comme pour le détenteur du lien privé
@@ -333,11 +342,11 @@ export async function deleteInspection(id: string): Promise<{ success: boolean; 
   try {
     const { ok, data } = await jsonPost('/api/inspections/delete', { id }, true);
     if (!ok) {
-      return { success: false, error: data?.error || 'Suppression impossible.', code: data?.code };
+      return { success: false, error: formatApiError(data?.error, 'Suppression impossible.'), code: data?.code };
     }
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err?.message || 'Erreur réseau de suppression.' };
+    return { success: false, error: formatApiError(err?.message, 'Erreur réseau de suppression.') };
   }
 }
 
@@ -387,7 +396,7 @@ export async function replaceInspectionVideo(
       try {
         await supabase.storage.from(INSPECTION_VIDEOS_BUCKET).remove([upload.path]);
       } catch {}
-      return { success: false, error: data?.error || 'Remplacement impossible.', code: data?.code };
+      return { success: false, error: formatApiError(data?.error, 'Remplacement impossible.'), code: data?.code };
     }
 
     return { success: true, videoUrl: data.videoUrl || upload.publicUrl };

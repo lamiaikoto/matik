@@ -584,7 +584,12 @@ export const VideoInspectionStudio: React.FC<VideoInspectionStudioProps> = ({
         }
       }, 200);
     } catch (err: any) {
-      setError(err?.message || "L'enregistrement n'a pas pu démarrer.");
+      const raw = err?.message || err?.error || err;
+      const msg =
+        typeof raw === 'object' && raw !== null
+          ? (raw as any).message || (raw as any).error || JSON.stringify(raw)
+          : String(raw || "L'enregistrement n'a pas pu démarrer.");
+      setError(msg);
       setIsRecording(false);
     } finally {
       setIsPreparing(false);
@@ -624,7 +629,12 @@ export const VideoInspectionStudio: React.FC<VideoInspectionStudioProps> = ({
           durationSeconds: recorded.durationSeconds,
         });
         if (!rep.success) {
-          throw new Error(rep.error || 'Le remplacement de la vidéo a échoué.');
+          const rawErr = rep.error;
+          const msg =
+            typeof rawErr === 'object' && rawErr !== null
+              ? (rawErr as any).message || (rawErr as any).error || JSON.stringify(rawErr)
+              : String(rawErr || 'Le remplacement de la vidéo a échoué.');
+          throw new Error(msg);
         }
         setPublished({ id: existingInspection.id, url: buildInspectionShareUrl(existingInspection.id) });
         setNotice('Vidéo remplacée avant la validation du client.');
@@ -651,7 +661,12 @@ export const VideoInspectionStudio: React.FC<VideoInspectionStudioProps> = ({
       onPublished?.();
       stopStream();
     } catch (err: any) {
-      setError(err?.message || "La publication de l'état des lieux a échoué.");
+      const raw = err?.message || err?.error || err;
+      const msg =
+        typeof raw === 'object' && raw !== null
+          ? (raw as any).message || (raw as any).error || JSON.stringify(raw)
+          : String(raw || "La publication de l'état des lieux a échoué.");
+      setError(msg);
     } finally {
       setIsPublishing(false);
     }
@@ -1000,7 +1015,11 @@ export const VideoInspectionStudio: React.FC<VideoInspectionStudioProps> = ({
         {error && (
           <div className="flex items-start gap-2.5 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-[12px] text-red-800">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>{error}</span>
+            <span>
+              {typeof error === 'object' && error !== null
+                ? (error as any).message || (error as any).error || JSON.stringify(error)
+                : String(error)}
+            </span>
           </div>
         )}
 

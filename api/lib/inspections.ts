@@ -10,7 +10,7 @@
  *     opérations possibles une fois `client_validated_at` renseigné.
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { ApiError, getSupabaseAdmin, getBearerToken } from './bookingSecurity';
+import { ApiError, getSupabaseAdmin, getBearerToken } from './bookingSecurity.js';
 
 export const INSPECTION_BUCKET = 'inspection-videos';
 

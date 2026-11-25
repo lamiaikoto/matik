@@ -6,7 +6,7 @@ import {
   getSupabaseAdmin,
   requireUser,
   toErrorPayload,
-} from './lib/bookingSecurity';
+} from './lib/bookingSecurity.js';
 
 /**
  * MATIK — Messagerie interne par réservation.

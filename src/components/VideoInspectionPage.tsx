@@ -115,7 +115,12 @@ export const VideoInspectionPage: React.FC<VideoInspectionPageProps> = ({
     setActionError(null);
     const result = await deleteInspection(row.id);
     if (!result.success) {
-      setActionError(result.error || 'Suppression impossible. Réessayez.');
+      const rawError = result.error || 'Suppression impossible. Réessayez.';
+      const msg =
+        typeof rawError === 'object' && rawError !== null
+          ? (rawError as any).message || (rawError as any).error || JSON.stringify(rawError)
+          : String(rawError);
+      setActionError(msg);
       setDeletingId(null);
       return;
     }
@@ -252,7 +257,11 @@ export const VideoInspectionPage: React.FC<VideoInspectionPageProps> = ({
             {actionError && (
               <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs text-rose-800">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                <span>{actionError}</span>
+                <span>
+                  {typeof actionError === 'object' && actionError !== null
+                    ? (actionError as any).message || (actionError as any).error || JSON.stringify(actionError)
+                    : String(actionError)}
+                </span>
               </div>
             )}
 

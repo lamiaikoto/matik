@@ -19,13 +19,13 @@
  *   - l'ancienne vidéo Storage est supprimée lors du remplacement ;
  *   - après validation, seule la suppression reste disponible (route delete).
  */
-import { applyCors, ApiError, toErrorPayload } from '../lib/bookingSecurity';
+import { applyCors, ApiError, toErrorPayload } from '../lib/bookingSecurity.js';
 import {
   authorizeInspectionAccess,
   fetchInspectionRow,
   getInspectionAdmin,
   removeInspectionVideoObject,
-} from '../lib/inspections';
+} from '../lib/inspections.js';
 
 const ALLOWED_CATEGORIES = ['logement', 'outillage', 'evenementiel', 'vehicule', 'autre'];
 const ALLOWED_TYPES = ['entree', 'sortie'];
